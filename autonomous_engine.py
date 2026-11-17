@@ -139,7 +139,7 @@ def generate_verified_storyboard(signals, used_topics, analytics_feedback):
        - Scene 10 delivers the twist AND ends with an incomplete 4-word bridge phrase (e.g. '...which is exactly why') that flows grammatically into the first word of Scene 1 for a seamless loop.
     """
     draft = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model="gemini-3.8-flash",
         contents=research_prompt,
         config=types.GenerateContentConfig(tools=[types.Tool(google_search=types.GoogleSearch())])
     )
@@ -165,7 +165,7 @@ def generate_verified_storyboard(signals, used_topics, analytics_feedback):
     }}
     """
     final = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model="gemini-3.8-flash",
         contents=critic_prompt,
         config=types.GenerateContentConfig(response_mime_type="application/json")
     )
