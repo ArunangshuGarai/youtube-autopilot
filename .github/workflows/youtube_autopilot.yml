@@ -15,8 +15,8 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Install FFmpeg & Subtitle Fonts
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core
+      - name: Install FFmpeg, Fonts & eSpeak-NG for Kokoro Neural Voice
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core espeak-ng libsndfile1
 
       - name: Set Up Python 3.11
         uses: actions/setup-python@v5
@@ -24,7 +24,12 @@ jobs:
           python-version: '3.11'
 
       - name: Install Python Packages
-        run: pip install google-genai google-api-python-client google-auth google-auth-httplib2 edge-tts requests pillow
+        run: pip install google-genai google-api-python-client google-auth google-auth-httplib2 kokoro-onnx soundfile numpy gradio_client edge-tts requests pillow
+
+      - name: Download Kokoro-82M Human Voice Weights
+        run: |
+          curl -sL https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx -o kokoro-v1.0.onnx
+          curl -sL https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin -o voices-v1.0.bin
 
       - name: Execute Autonomous Studio Pipeline
         env:
