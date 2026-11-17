@@ -132,7 +132,7 @@ def generate_verified_storyboard(signals, used_topics, analytics_feedback):
     {json.dumps(used_topics[-60:])}
 
     1. Select or synthesize ONE bizarre, high-curiosity 'What-If' physics/medical dilemma, survival scenario, or scientific paradox with massive US appeal.
-    2. Use Google Search to verify real scientific mechanisms, exact numbers, and a counter-intuitive twist.
+    2. Use verified scientific mechanisms, exact numbers, and a counter-intuitive twist.
     3. Write a 10-scene script (~36 seconds total) where:
        - Scene 1 starts mid-crisis in the first 1.5 seconds (zero intro filler).
        - Scenes 2 to 9 escalate tension and explain the exact physical/biological mechanism.
@@ -140,9 +140,9 @@ def generate_verified_storyboard(signals, used_topics, analytics_feedback):
     """
     draft = client.models.generate_content(
         model="gemini-3.8-flash",
-        contents=research_prompt,
-        config=types.GenerateContentConfig(tools=[types.Tool(google_search=types.GoogleSearch())])
+        contents=research_prompt
     )
+    time.sleep(5)
 
     critic_prompt = f"""
     Refine this researched draft so it achieves 75%+ Stayed-to-Watch and 80%+ Average Percentage Viewed:
