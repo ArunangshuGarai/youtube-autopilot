@@ -115,7 +115,16 @@ def harvest_us_viral_signals(youtube_client):
     except Exception:
         pass
     return signals
-
+    
+def call_gemini_with_fallback(client, contents, config=None):
+    for model_name in ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.8-flash"]:
+        try:
+            return client.models.generate_content(model=model_name, contents=contents, config=config)
+        except Exception as e:
+            print(f"Model {model_name} busy ({e}), trying fallback in 10s...")
+            time.sleep(10)
+    raise RuntimeError("All Gemini models temporarily unavailable.")
+    
 # 4. GEMINI 2.5 FLASH RESEARCH + VIRAL CRITIC + SEAMLESS LOOP ARCHITECT
 def generate_verified_storyboard(signals, used_topics, analytics_feedback):
     client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
@@ -138,10 +147,7 @@ def generate_verified_storyboard(signals, used_topics, analytics_feedback):
        - Scenes 2 to 9 escalate tension and explain the exact physical/biological mechanism.
        - Scene 10 delivers the twist AND ends with an incomplete 4-word bridge phrase (e.g. '...which is exactly why') that flows grammatically into the first word of Scene 1 for a seamless loop.
     """
-    draft = client.models.generate_content(
-        model="gemini-3.8-flash",
-        contents=research_prompt
-    )
+    draft = call_gemini_with_fallback(client, research_prompt)
     time.sleep(5)
 
     critic_prompt = f"""
@@ -164,9 +170,9 @@ def generate_verified_storyboard(signals, used_topics, analytics_feedback):
       ]
     }}
     """
-    final = client.models.generate_content(
-        model="gemini-3.8-flash",
-        contents=critic_prompt,
+    final = call_gemini_with_fallback(
+        client,
+        critic_prompt,
         config=types.GenerateContentConfig(response_mime_type="application/json")
     )
     return json.loads(final.text)
