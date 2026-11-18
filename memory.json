@@ -8,7 +8,8 @@
     "anthropic-ipo-quantum-compute-paradox",
     "unh-stock-market-panic",
     "1904-unhinged-olympic-marathon",
-    "the-great-toaster-uprising"
+    "the-great-toaster-uprising",
+    "brinks-robbery-1950"
   ],
   "published_log": {
     "TREDHWTKPnU": {
@@ -58,11 +59,27 @@
       "scheduled_for": "2026-11-18T09:13:32Z",
       "is_fiction": true,
       "facts_used": []
+    },
+    "96NEgn2jSQg": {
+      "title": "The Heist With No Gunshots #Shorts",
+      "genre": "crime",
+      "hook": "Eleven men. Rubber masks. Not a single shot fired.",
+      "scheduled_for": "2026-11-18T14:18:59Z",
+      "is_fiction": false,
+      "facts_used": [
+        "Brink's robbery, Boston, January 17 1950",
+        "11 men, Halloween masks, rubber-soled shoes",
+        "about 2.7 million dollars taken",
+        "statute of limitations six years",
+        "Joseph 'Specs' O'Keefe talked days before it expired",
+        "eight men convicted"
+      ]
     }
   },
   "channel_synced": true,
-  "bot_uploads": 4,
+  "bot_uploads": 5,
   "genre_log": [
-    "comedy"
+    "comedy",
+    "crime"
   ]
 }
