@@ -6,7 +6,8 @@
     "THE LOST CITY OF GOLD: Maya's Amazonian Adventures",
     "The Star Thief's Wish \u2728 || Animated Storytime Video",
     "anthropic-ipo-quantum-compute-paradox",
-    "unh-stock-market-panic"
+    "unh-stock-market-panic",
+    "1904-unhinged-olympic-marathon"
   ],
   "published_log": {
     "TREDHWTKPnU": {
@@ -43,8 +44,13 @@
       "title": "Wall Street Bro Trades Soul for Healthcare #Shorts",
       "hook": "Bob invested his entire life savings into a healthcare stock right before market open.",
       "scheduled_for": "2026-11-17T15:42:29Z"
+    },
+    "XrQrHF4DoW0": {
+      "title": "The Most Unhinged Olympic Race in History #Shorts",
+      "hook": "A terrified marathon runner is sprinting for his life from angry wild dogs!",
+      "scheduled_for": "2026-11-18T06:47:17Z"
     }
   },
   "channel_synced": true,
-  "bot_uploads": 2
+  "bot_uploads": 3
 }
