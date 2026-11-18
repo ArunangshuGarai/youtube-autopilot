@@ -7,7 +7,8 @@
     "The Star Thief's Wish \u2728 || Animated Storytime Video",
     "anthropic-ipo-quantum-compute-paradox",
     "unh-stock-market-panic",
-    "1904-unhinged-olympic-marathon"
+    "1904-unhinged-olympic-marathon",
+    "the-great-toaster-uprising"
   ],
   "published_log": {
     "TREDHWTKPnU": {
@@ -49,8 +50,19 @@
       "title": "The Most Unhinged Olympic Race in History #Shorts",
       "hook": "A terrified marathon runner is sprinting for his life from angry wild dogs!",
       "scheduled_for": "2026-11-18T06:47:17Z"
+    },
+    "CvPquXtBBRQ": {
+      "title": "When Toast Declares War #Shorts",
+      "genre": "comedy",
+      "hook": "Why did my toaster just demand a ransom?",
+      "scheduled_for": "2026-11-18T09:13:32Z",
+      "is_fiction": true,
+      "facts_used": []
     }
   },
   "channel_synced": true,
-  "bot_uploads": 3
+  "bot_uploads": 4,
+  "genre_log": [
+    "comedy"
+  ]
 }
