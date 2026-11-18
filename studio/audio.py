@@ -13,12 +13,12 @@ SR = 44100
 # ----------------------------------------------------------------------------- voices
 # Every profile can be overridden with env vars, e.g. VOICE_GRAVE="bm_george" VOICE_GRAVE_SPEED=0.95
 VOICE_PROFILES = {
-    "grave":     dict(voice="am_fenrir", speed=0.96, pause_period=0.34, pause_comma=0.15, edge="en-US-AndrewNeural", edge_rate=-6, edge_pitch=-3),
-    "tense":     dict(voice="am_fenrir", speed=1.02, pause_period=0.28, pause_comma=0.12, edge="en-US-BrianNeural", edge_rate=0, edge_pitch=-2),
-    "jolly":     dict(voice="am_puck", speed=1.08, pause_period=0.22, pause_comma=0.10, edge="en-US-GuyNeural", edge_rate=8, edge_pitch=2),
-    "sarcastic": dict(voice="am_michael", speed=1.04, pause_period=0.30, pause_comma=0.13, edge="en-US-ChristopherNeural", edge_rate=4, edge_pitch=0),
+    "grave":     dict(voice="am_fenrir", speed=0.98, pause_period=0.40, pause_comma=0.18, edge="en-US-AndrewNeural", edge_rate=-2, edge_pitch=-2),
+    "tense":     dict(voice="am_fenrir", speed=1.00, pause_period=0.38, pause_comma=0.16, edge="en-US-BrianNeural", edge_rate=0, edge_pitch=-2),
+    "jolly":     dict(voice="am_michael", speed=1.00, pause_period=0.38, pause_comma=0.16, edge="en-US-GuyNeural", edge_rate=2, edge_pitch=0),
+    "sarcastic": dict(voice="am_michael", speed=1.00, pause_period=0.38, pause_comma=0.16, edge="en-US-ChristopherNeural", edge_rate=2, edge_pitch=0),
 }
-DELIVERY_SPEED = {"normal": 1.0, "slow": 0.86, "fast": 1.14, "whisper": 0.82, "excited": 1.12, "deadpan": 0.94}
+DELIVERY_SPEED = {"normal": 1.0, "slow": 0.97, "fast": 1.03, "whisper": 0.96, "excited": 1.03, "deadpan": 0.98}
 KEEP_AS_WORD = {"NASA", "NATO", "SWAT", "LEGO", "OPEC", "FIFA", "COVID", "AIDS", "UNESCO", "RADAR", "LASER", "SCUBA", "PIN", "WIFI"}
 PRONOUNCE = {"IV": "eye-vee", "DNA": "D N A", "ID": "I D", "TV": "T V", "AI": "A I", "UFO": "U F O"}
 
@@ -380,7 +380,7 @@ def _envelope(x, win):
     out = (c[k:] - c[:-k]) / k
     return np.concatenate([out, np.full(len(x) - len(out), out[-1] if len(out) else 0)])
 
-def mix_tracks(voice, music, sfx_events, total_dur, music_db=-17, duck=0.72):
+def mix_tracks(voice, music, sfx_events, total_dur, music_db=-27, duck=0.85):
     """voice/music: arrays at SR; sfx_events: list of (name, t_seconds, gain). Returns mono float32."""
     n = int(total_dur * SR)
     out = np.zeros(n, dtype=np.float32)
@@ -396,7 +396,7 @@ def mix_tracks(voice, music, sfx_events, total_dur, music_db=-17, duck=0.72):
         i = int(max(0, t0) * SR)
         j = min(n, i + len(x))
         if i < n:
-            out[i:j] += x[: j - i] * g
+            out[i:j] += x[: j - i] * (g * 0.42)
     peak = np.max(np.abs(out)) or 1
     if peak > 0.95:
         out = out / peak * 0.95
