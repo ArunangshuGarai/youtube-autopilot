@@ -10,7 +10,8 @@
     "1904-unhinged-olympic-marathon",
     "the-great-toaster-uprising",
     "brinks-robbery-1950",
-    "text-from-my-own-number"
+    "text-from-my-own-number",
+    "photo-from-behind-wardrobe"
   ],
   "published_log": {
     "TREDHWTKPnU": {
@@ -83,13 +84,22 @@
       "scheduled_for": "2026-11-18T15:23:07Z",
       "is_fiction": true,
       "facts_used": []
+    },
+    "1PuAwHWjWhs": {
+      "title": "The Photo Taken From Behind Him #Shorts",
+      "genre": "thriller",
+      "hook": "Late at night, Alex was sitting alone at his desk using his laptop.",
+      "scheduled_for": "2026-11-18T16:23:22Z",
+      "is_fiction": true,
+      "facts_used": []
     }
   },
   "channel_synced": true,
-  "bot_uploads": 6,
+  "bot_uploads": 7,
   "genre_log": [
     "comedy",
     "crime",
+    "thriller",
     "thriller"
   ]
 }
