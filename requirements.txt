@@ -3,9 +3,10 @@ google-api-python-client
 google-auth
 google-auth-httplib2
 kokoro-onnx
+faster-whisper
+pycairo
 soundfile
 numpy
-gradio_client
-edge-tts
-requests
 pillow
+requests
+edge-tts
