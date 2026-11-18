@@ -1,4 +1,4 @@
-import os, re, json, time, math, random, shutil, urllib.parse, subprocess, xml.etree.ElementTree as ET
+import os, io, re, json, time, math, random, shutil, urllib.parse, subprocess, xml.etree.ElementTree as ET
 from datetime import datetime, date, timedelta, timezone
 import numpy as np
 import soundfile as sf
@@ -54,7 +54,8 @@ def sync_existing_channel_history(youtube_client, memory):
 
 # 1. WARM-UP GATE
 def enforce_warmup_gate(memory):
-    total_uploaded = len(memory.get("used_topics", []))
+    # Count only videos this bot published. used_topics also holds the channel's old, unrelated uploads.
+    total_uploaded = memory.get("bot_uploads", 0)
     current_utc_hour = datetime.now(timezone.utc).hour
     is_scheduled = os.environ.get("GITHUB_EVENT_NAME") == "schedule"
     if is_scheduled and total_uploaded < 14 and current_utc_hour not in (13, 14, 15):
@@ -242,16 +243,44 @@ def generate_transition_sfx(out_sfx_wav, duration=0.38, sr=44100):
     sfx = np.clip(thud + whoosh, -0.9, 0.9).astype(np.float32)
     sf.write(out_sfx_wav, sfx, sr)
 
-# 6. DUAL-CLOUD REAL AI IMAGE FETCHER (Hugging Face FLUX.1-schnell + Pollinations 768x1344 with Browser Headers)
+# 6. MULTI-PROVIDER AI IMAGE FETCHER
+#    HF FLUX (authenticated) -> Gemini image model (opt-in) -> Pollinations -> offline placeholder.
+#    Every failure is logged with its reason, and a single bad scene never aborts the whole run.
+MIN_STDDEV = 14.0          # flat cartoon art has low pixel variance; the old 22.0 rejected valid images
+MAX_FALLBACK_SCENES = 3    # abort rather than publish a mostly-placeholder video
 HF_CLIENT = None
-def fetch_real_ai_illustration(prompt_text, idx, seed_base):
-    """Guarantees a real, high-detail AI illustration using Hugging Face FLUX.1-schnell and Pollinations."""
-    global HF_CLIENT
-    # Tier 1: Hugging Face black-forest-labs/FLUX.1-schnell via Gradio Client
+HF_DISABLED = False
+FALLBACK_SCENES = []
+
+def _cover_resize(im, size=(1080, 1920)):
+    """Scale to fully cover the target frame, then center-crop (keeps aspect ratio, no stretching)."""
+    tw, th = size
+    scale = max(tw / im.width, th / im.height)
+    im = im.resize((math.ceil(im.width * scale), math.ceil(im.height * scale)), Image.Resampling.LANCZOS)
+    left, top = (im.width - tw) // 2, (im.height - th) // 2
+    return im.crop((left, top, left + tw, top + th))
+
+def _image_ok(im, label, idx):
+    sd = max(ImageStat.Stat(im).stddev)
+    if sd <= MIN_STDDEV:
+        print(f"Scene {idx} [{label}] rejected: too flat (stddev {sd:.1f} <= {MIN_STDDEV})")
+        return False
+    return True
+
+def _try_hf_flux(prompt_text, idx, seed_base):
+    global HF_CLIENT, HF_DISABLED
+    if HF_DISABLED:
+        return None
     try:
         from gradio_client import Client
         if HF_CLIENT is None:
-            HF_CLIENT = Client("black-forest-labs/FLUX.1-schnell")
+            token = os.environ.get("HF_TOKEN") or None
+            if token is None:
+                print("HF_TOKEN not set - using the anonymous (heavily shared) ZeroGPU quota.")
+            try:
+                HF_CLIENT = Client("black-forest-labs/FLUX.1-schnell", token=token)
+            except TypeError:  # older gradio_client versions
+                HF_CLIENT = Client("black-forest-labs/FLUX.1-schnell", hf_token=token)
         res = HF_CLIENT.predict(
             prompt=prompt_text,
             seed=seed_base + idx,
@@ -264,35 +293,106 @@ def fetch_real_ai_illustration(prompt_text, idx, seed_base):
         img_file = res[0] if isinstance(res, (list, tuple)) else res
         if isinstance(img_file, dict) and "path" in img_file:
             img_file = img_file["path"]
-        im = Image.open(img_file).convert("RGB").resize((1080, 1920), Image.Resampling.LANCZOS)
-        if max(ImageStat.Stat(im).stddev) > 22.0:
-            print(f"Scene {idx}: Rendered via HuggingFace FLUX.1-schnell!")
-            return im
+        im = _cover_resize(Image.open(img_file).convert("RGB"))
+        return im if _image_ok(im, "HF FLUX", idx) else None
     except Exception as e:
-        print(f"Scene {idx} HF FLUX note ({e}), switching to Pollinations 768x1344...")
+        msg = str(e)
+        print(f"Scene {idx} [HF FLUX] failed: {msg[:220]}")
+        if "quota" in msg.lower():
+            HF_DISABLED = True
+            print("HF ZeroGPU quota exhausted - skipping HF for the rest of this run.")
+        return None
 
-    # Tier 2: Pollinations 64-aligned 768x1344 with full Desktop Chrome User-Agent Header
-    encoded = urllib.parse.quote(prompt_text)
-    for attempt, model_name in enumerate(["flux", "turbo", "flux", "turbo"]):
+def _try_gemini_image(prompt_text, idx):
+    """Opt-in: only runs when the GEMINI_IMAGE_MODEL env var names an image-capable model."""
+    model = os.environ.get("GEMINI_IMAGE_MODEL", "").strip()
+    api_key = os.environ.get("GEMINI_API_KEY", "")
+    if not model or not api_key:
+        return None
+    try:
+        from google.genai import types
+        client = genai.Client(api_key=api_key)
+        res = client.models.generate_content(
+            model=model,
+            contents=f"{prompt_text}. Vertical 9:16 portrait composition.",
+            config=types.GenerateContentConfig(response_modalities=["TEXT", "IMAGE"])
+        )
+        for cand in (res.candidates or []):
+            for part in (cand.content.parts or []):
+                inline = getattr(part, "inline_data", None)
+                if inline is not None and inline.data:
+                    im = _cover_resize(Image.open(io.BytesIO(inline.data)).convert("RGB"))
+                    return im if _image_ok(im, f"Gemini {model}", idx) else None
+        print(f"Scene {idx} [Gemini {model}] returned no image part.")
+    except Exception as e:
+        print(f"Scene {idx} [Gemini {model}] failed: {str(e)[:220]}")
+    return None
+
+def _try_pollinations(prompt_text, idx, seed_base):
+    headers = dict(BROWSER_HEADERS)
+    if os.environ.get("POLLINATIONS_TOKEN"):
+        headers["Authorization"] = f"Bearer {os.environ['POLLINATIONS_TOKEN']}"
+    encoded = urllib.parse.quote(prompt_text[:700])  # very long URLs can be rejected outright
+    for attempt, model_name in enumerate(["flux", "turbo", "flux"]):
         url = (
             f"https://image.pollinations.ai/prompt/{encoded}"
             f"?width=768&height=1344&model={model_name}&seed={seed_base + idx * 10 + attempt}&nologo=true&enhance=true"
         )
         try:
-            r = requests.get(url, headers=BROWSER_HEADERS, timeout=60)
-            if r.status_code == 200 and len(r.content) > 15000:
-                tmp_p = f"build/dl_{idx}_{attempt}.jpg"
-                with open(tmp_p, "wb") as f:
-                    f.write(r.content)
-                im = Image.open(tmp_p).convert("RGB").resize((1080, 1920), Image.Resampling.LANCZOS)
-                if max(ImageStat.Stat(im).stddev) > 22.0:
-                    print(f"Scene {idx}: Rendered via Pollinations/{model_name}!")
+            r = requests.get(url, headers=headers, timeout=60)
+            if r.status_code != 200:
+                print(f"Scene {idx} [Pollinations/{model_name}] HTTP {r.status_code}: {r.text[:120]!r}")
+            elif len(r.content) <= 15000:
+                print(f"Scene {idx} [Pollinations/{model_name}] response too small ({len(r.content)} bytes)")
+            else:
+                im = _cover_resize(Image.open(io.BytesIO(r.content)).convert("RGB"))
+                if _image_ok(im, f"Pollinations/{model_name}", idx):
                     return im
         except Exception as e:
-            print(f"Pollinations attempt {attempt} note: {e}")
-        time.sleep(3)
+            print(f"Scene {idx} [Pollinations/{model_name}] attempt {attempt} failed: {str(e)[:160]}")
+        time.sleep(3 * (attempt + 1))
+    return None
 
-    raise RuntimeError(f"Could not generate AI artwork for Scene {idx}")
+def _procedural_fallback_image(idx, seed_base):
+    """Last resort that needs no network: moody gradient + a bold-outlined stick figure."""
+    rng = random.Random(seed_base + idx)
+    w, h = 1080, 1920
+    top = tuple(rng.randint(15, 60) for _ in range(3))
+    bottom = tuple(rng.randint(100, 180) for _ in range(3))
+    im = Image.new("RGB", (w, h))
+    draw = ImageDraw.Draw(im)
+    for y in range(h):
+        t = y / (h - 1)
+        draw.line([(0, y), (w, y)], fill=tuple(int(top[c] * (1 - t) + bottom[c] * t) for c in range(3)))
+    ink, white = (12, 12, 12), (245, 245, 245)
+    cx, cy = w // 2 + rng.randint(-120, 120), 1000
+    def limb(p, q):
+        draw.line([p, q], fill=ink, width=40)
+        draw.line([p, q], fill=white, width=20)
+    neck, hip = (cx, cy - 170), (cx, cy + 130)
+    limb(neck, hip)
+    limb((cx, cy - 110), (cx + rng.randint(-230, -90), cy - rng.randint(0, 200)))
+    limb((cx, cy - 110), (cx + rng.randint(90, 230), cy - rng.randint(0, 200)))
+    limb(hip, (cx + rng.randint(-170, -60), cy + 400))
+    limb(hip, (cx + rng.randint(60, 170), cy + 400))
+    draw.ellipse([cx - 80, cy - 330, cx + 80, cy - 170], fill=white, outline=ink, width=14)
+    return im
+
+def fetch_real_ai_illustration(prompt_text, idx, seed_base):
+    """Returns a 1080x1920 RGB image for the scene. Never raises: degrades to an offline placeholder."""
+    providers = (
+        ("HF FLUX", lambda: _try_hf_flux(prompt_text, idx, seed_base)),
+        ("Gemini image", lambda: _try_gemini_image(prompt_text, idx)),
+        ("Pollinations", lambda: _try_pollinations(prompt_text, idx, seed_base)),
+    )
+    for label, attempt in providers:
+        im = attempt()
+        if im is not None:
+            print(f"Scene {idx}: rendered via {label}")
+            return im
+    print(f"Scene {idx}: ALL image providers failed - using offline placeholder")
+    FALLBACK_SCENES.append(idx)
+    return _procedural_fallback_image(idx, seed_base)
 
 # 7. DYNAMIC 2-WORD POP-IN '.ASS' KARAOKE SUBTITLE GENERATOR (Unobstructed Center-Lower Pop-In)
 def format_ass_time(seconds):
@@ -449,9 +549,13 @@ def render_story_video(storyboard):
 def auto_qa_verify_video(video_path, thumb_path, storyboard):
     if not os.path.exists(video_path) or os.path.getsize(video_path) < 350000:
         raise RuntimeError("QA Gate Blocked: Video file too small.")
+    if len(FALLBACK_SCENES) > MAX_FALLBACK_SCENES:
+        raise RuntimeError(f"QA Gate Blocked: {len(FALLBACK_SCENES)} scenes used offline placeholders {FALLBACK_SCENES}.")
     for idx in range(len(storyboard["scenes"])):
+        if idx in FALLBACK_SCENES:
+            continue  # placeholders are intentionally simple; the count is capped above
         im = Image.open(f"build/wide_{idx}.jpg")
-        if max(ImageStat.Stat(im).stddev) < 22.0:
+        if max(ImageStat.Stat(im).stddev) < MIN_STDDEV:
             raise RuntimeError(f"QA Gate Blocked: Scene {idx} failed visual richness test.")
     storyboard["title"] = re.sub(r"#\d+\s*", "", storyboard["title"]).strip()
     if "#Shorts" not in storyboard["title"]:
@@ -525,6 +629,7 @@ if __name__ == "__main__":
     video_id, scheduled_time = publish_with_thumbnail(yt, final_mp4, thumb_jpg, storyboard)
 
     memory["used_topics"].append(storyboard["topic_id"])
+    memory["bot_uploads"] = memory.get("bot_uploads", 0) + 1
     memory.setdefault("published_log", {})[video_id] = {
         "title": storyboard["title"],
         "hook": storyboard["scenes"][0]["narration"],
