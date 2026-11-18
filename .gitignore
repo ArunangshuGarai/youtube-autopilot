@@ -1,0 +1,5 @@
+__pycache__/
+build/
+final_video.mp4
+kokoro-v1.0.onnx
+voices-v1.0.bin
