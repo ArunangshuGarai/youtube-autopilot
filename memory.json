@@ -9,7 +9,8 @@
     "unh-stock-market-panic",
     "1904-unhinged-olympic-marathon",
     "the-great-toaster-uprising",
-    "brinks-robbery-1950"
+    "brinks-robbery-1950",
+    "text-from-my-own-number"
   ],
   "published_log": {
     "TREDHWTKPnU": {
@@ -74,12 +75,21 @@
         "Joseph 'Specs' O'Keefe talked days before it expired",
         "eight men convicted"
       ]
+    },
+    "sO31LdXzEJs": {
+      "title": "The Text From My Own Number #Shorts",
+      "genre": "thriller",
+      "hook": "At three a.m., my phone buzzed. The text came from my own number.",
+      "scheduled_for": "2026-11-18T15:23:07Z",
+      "is_fiction": true,
+      "facts_used": []
     }
   },
   "channel_synced": true,
-  "bot_uploads": 5,
+  "bot_uploads": 6,
   "genre_log": [
     "comedy",
-    "crime"
+    "crime",
+    "thriller"
   ]
 }
