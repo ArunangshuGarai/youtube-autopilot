@@ -87,7 +87,7 @@ CRAFT RULES (follow all):
 # --------------------------------------------------------------------------- LLM plumbing
 def _gemini_models():
     env = os.environ.get("GEMINI_TEXT_MODELS", "").strip()
-    return [m.strip() for m in env.split(",") if m.strip()] or ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemma-3-27b-it", "gemini-3.8-flash"]
+    return [m.strip() for m in env.split(",") if m.strip()] or ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite"]
 
 def _extract_json(raw):
     cleaned = re.sub(r"^```(?:json)?|```$", "", raw.strip(), flags=re.MULTILINE).strip()
@@ -129,6 +129,36 @@ def _pollinations_text(prompt):
                 return r.text
         except Exception as e:
             print(f"Pollinations text {model} failed: {str(e)[:80]}")
+    return None
+
+def _github_models_text(prompt):
+    token = os.environ.get("GITHUB_TOKEN", "")
+    if not token:
+        return None
+    try:
+        r = requests.post(
+            "https://models.github.ai/inference/chat/completions",
+            headers={
+                "Accept": "application/vnd.github+json",
+                "Authorization": f"Bearer {token}",
+                "X-GitHub-Api-Version": "2022-11-28",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": "openai/gpt-4o",
+                "messages": [
+                    {"role": "system", "content": "Output ONLY valid raw JSON with no markdown fences."},
+                    {"role": "user", "content": prompt},
+                ],
+                "temperature": 0.9,
+            },
+            timeout=45,
+        )
+        if r.status_code == 200:
+            return r.json()["choices"][0]["message"]["content"]
+        print(f"GitHub Models status {r.status_code}: {r.text[:120]}")
+    except Exception as e:
+        print(f"GitHub Models failed: {str(e)[:80]}")
     return None
 
 def research_facts(genre, used):
@@ -216,7 +246,7 @@ Inspiration (optional, ignore if not a good fit): {json.dumps((signals or [])[:8
 {facts_block}
 {SCHEMA_DOC}"""
     for attempt in range(3):
-        raw = _gemini_text(prompt) or _pollinations_text(prompt)
+        raw = _gemini_text(prompt) or _github_models_text(prompt) or _pollinations_text(prompt)
         if not raw:
             break
         try:

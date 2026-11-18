@@ -197,7 +197,7 @@ def ai_multimodal_virality_audit(video_path, sb):
     4. Technical Cleanliness (No blank panels, broken text, or unreadable overlaps?)
     Return ONLY valid JSON: {{"score": 88, "pass": true, "critique": "1-sentence explanation", "fix_hint": "what to change if score < 80"}}
     """
-    for model_name in ("gemini-3.8-flash", "gemma-3-27b-it"):
+    for model_name in ("gemini-3.8-flash", "gemini-3.6-flash"):
         try:
             res = client.models.generate_content(
                 model=model_name,
