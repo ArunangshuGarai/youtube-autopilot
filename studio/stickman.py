@@ -201,108 +201,105 @@ def solve_pose(name, t, prev=None, blend_t=0.0, blend_dur=0.22):
     return a
 
 # ----------------------------------------------------------------------------- face
-FACES = {   # eyes, brows, mouth, extras
-    "neutral":    ("dot", "none", "flat"),
-    "happy":      ("happy", "none", "smile"),
-    "laugh":      ("happy", "none", "laugh"),
-    "scared":     ("wide", "worried", "wobble"),
-    "shocked":    ("wide", "raised", "o"),
-    "angry":      ("dot", "angry", "frown"),
-    "sad":        ("dot", "worried", "frown"),
-    "smirk":      ("dot", "angry_half", "smirk"),
-    "suspicious": ("side", "angry_half", "flat"),
-    "sleepy":     ("closed", "none", "flat"),
+# In studio/stickman.py — Replace FACES and draw_face (lines 204-306):
+FACES = {
+    "neutral":    ("big_calm", "none", "flat"),
+    "happy":      ("big_happy", "none", "smile"),
+    "laugh":      ("big_happy", "raised", "laugh"),
+    "scared":     ("big_panic", "worried", "wobble"),
+    "shocked":    ("bloodshot", "raised", "scream"),
+    "angry":      ("big_angry", "angry", "grit"),
+    "sad":        ("crying_flood", "worried", "frown"),
+    "smirk":      ("big_calm", "angry_half", "smirk"),
+    "suspicious": ("side_squint", "angry_half", "flat"),
+    "sleepy":     ("bloodshot_tired", "none", "smile"),
     "dead":       ("x", "none", "flat"),
-    "confused":   ("dot", "raised_one", "wobble"),
-    "sly":        ("squint", "angry_half", "smirk"),
-    "screaming":  ("wide", "worried", "scream"),
+    "confused":   ("big_calm", "raised_one", "wobble"),
+    "sly":        ("side_squint", "angry_half", "smirk"),
+    "screaming":  ("bloodshot", "worried", "scream"),
 }
 
 def draw_face(ctx, cx, cy, r, expr, t):
+    """Rico / Avenu Animations oversized expressive eyes + mouth renderer."""
     eyes, brows, mouth = FACES.get(expr, FACES["neutral"])
-    ex = r * 0.34
-    fx = r * 0.22                       # face is shifted toward facing direction (3/4 view)
-    ey = cy - r * 0.08
-    lw = max(4, r * 0.1)
+    # Hand-drawn 8-fps boil jitter
+    boil_rng = random.Random(int(t * 8))
+    jx, jy = boil_rng.uniform(-1.8, 1.8), boil_rng.uniform(-1.8, 1.8)
+    fx = r * 0.14
+    ey = cy - r * 0.10 + jy
+    eye_r = r * 0.36  # Giant touching cartoon eyes (Rico / Avenu style)
+    lw = max(5, r * 0.085)
     ctx.set_line_cap(cairo.LINE_CAP_ROUND)
-    ctx.set_source_rgb(*INK)
-    blink = (t % 3.4) > 3.28
+
     for sx in (-1, 1):
-        x = cx + fx + sx * ex
-        if eyes == "dot" or (blink and eyes in ("dot", "wide", "side")):
-            ctx.set_line_width(lw)
-            if blink:
-                ctx.move_to(x - r * .12, ey); ctx.line_to(x + r * .12, ey); ctx.stroke()
-            else:
-                ctx.arc(x, ey, r * 0.115, 0, math.tau); ctx.fill()
-        elif eyes == "wide":
-            circle(ctx, x, ey, r * 0.22, WHITE)
-            ctx.set_source_rgb(*INK); ctx.set_line_width(lw * .6)
-            ctx.arc(x, ey, r * 0.22, 0, math.tau); ctx.stroke()
-            ctx.arc(x + r * .04, ey, r * 0.08, 0, math.tau); ctx.fill()
-        elif eyes == "side":
-            circle(ctx, x, ey, r * 0.2, WHITE)
-            ctx.set_source_rgb(*INK); ctx.set_line_width(lw * .6)
-            ctx.arc(x, ey, r * 0.2, 0, math.tau); ctx.stroke()
-            ctx.arc(x + r * .12, ey, r * 0.08, 0, math.tau); ctx.fill()
-        elif eyes == "happy":
-            ctx.set_line_width(lw)
-            ctx.arc(x, ey + r * .1, r * .16, math.pi * 1.1, math.pi * 1.9); ctx.stroke()
-        elif eyes == "closed":
-            ctx.set_line_width(lw)
-            ctx.arc(x, ey - r * .06, r * .16, math.pi * .1, math.pi * .9); ctx.stroke()
-        elif eyes == "squint":
-            ctx.set_line_width(lw)
-            ctx.move_to(x - r * .15, ey); ctx.line_to(x + r * .15, ey); ctx.stroke()
-        elif eyes == "x":
-            ctx.set_line_width(lw * .9)
-            d = r * .13
-            ctx.move_to(x - d, ey - d); ctx.line_to(x + d, ey + d)
-            ctx.move_to(x + d, ey - d); ctx.line_to(x - d, ey + d); ctx.stroke()
-    # eyebrows
-    ctx.set_line_width(lw * .85)
-    by = ey - r * 0.3
-    if brows in ("angry", "angry_half"):
+        ex_pos = cx + fx + sx * (eye_r * 0.92) + jx
+        sclera = (1.0, 0.78, 0.78) if "bloodshot" in eyes else WHITE
+        # Draw giant oval eye
+        ctx.save(); ctx.translate(ex_pos, ey); ctx.scale(1.0, 1.18)
+        circle(ctx, 0, 0, eye_r, sclera)
+        # Red bloodshot capillary veins (Rico shower scene 0:09)
+        if "bloodshot" in eyes:
+            ctx.set_source_rgb(0.88, 0.18, 0.18); ctx.set_line_width(2.5)
+            for va in (-35, 15, 145, 200):
+                vr = math.radians(va)
+                ctx.move_to(math.cos(vr) * eye_r * 0.55, math.sin(vr) * eye_r * 0.55)
+                ctx.line_to(math.cos(vr) * eye_r * 0.95, math.sin(vr) * eye_r * 0.95); ctx.stroke()
+        # Heavy half-closed lid for tired/relieved look
+        if eyes in ("bloodshot_tired", "side_squint"):
+            ctx.set_source_rgb(0.68, 0.68, 0.64)
+            ctx.arc(0, 0, eye_r, math.pi, 0); ctx.close_path(); ctx.fill()
+            ctx.set_source_rgb(*INK); ctx.set_line_width(lw)
+            ctx.move_to(-eye_r, 0); ctx.line_to(eye_r, 0); ctx.stroke()
+        # Watery tear pool at bottom of eye (Avenu tattoo crying scene 0:11)
+        if eyes == "crying_flood":
+            ctx.set_source_rgba(0.55, 0.85, 1.0, 0.85)
+            ctx.arc(0, eye_r * 0.25, eye_r * 0.85, 0, math.pi); ctx.fill()
+        ctx.set_source_rgb(*INK); ctx.set_line_width(lw)
+        ctx.arc(0, 0, eye_r, 0, math.tau); ctx.stroke()
+        # Pupil (tiny pinprick when panicked/shocked, larger when calm)
+        p_size = eye_r * (0.14 if eyes in ("big_panic", "bloodshot") else 0.24)
+        px_off = eye_r * 0.18 if eyes == "side_squint" else 0
+        circle(ctx, px_off, 0, p_size, INK)
+        ctx.restore()
+
+        # Streaming waterfall tears for crying_flood
+        if eyes == "crying_flood":
+            tear_y = ey + eye_r * 0.9 + ((t * 90) % 45)
+            circle(ctx, ex_pos + sx * eye_r * 0.5, tear_y, r * 0.11, "#7fd4ff")
+
+    # Expressive Brows
+    by = ey - eye_r * 1.25
+    ctx.set_source_rgb(*INK); ctx.set_line_width(lw * 1.1)
+    if brows == "worried":
         for sx in (-1, 1):
-            if brows == "angry_half" and sx == -1:
-                continue
-            x = cx + fx + sx * ex
-            ctx.move_to(x - sx * r * .2, by - r * .12); ctx.line_to(x + sx * r * .16, by + r * .08); ctx.stroke()
-    elif brows == "worried":
+            x = cx + fx + sx * eye_r
+            ctx.move_to(x - sx * r * 0.28, by + r * 0.14); ctx.line_to(x + sx * r * 0.22, by - r * 0.16); ctx.stroke()
+    elif brows == "angry":
         for sx in (-1, 1):
-            x = cx + fx + sx * ex
-            ctx.move_to(x - sx * r * .2, by + r * .08); ctx.line_to(x + sx * r * .16, by - r * .12); ctx.stroke()
-    elif brows in ("raised", "raised_one"):
-        for sx in (-1, 1):
-            if brows == "raised_one" and sx == -1:
-                continue
-            x = cx + fx + sx * ex
-            ctx.arc(x, by + r * .2, r * .2, math.pi * 1.15, math.pi * 1.85); ctx.stroke()
-    # mouth
-    mx, my = cx + fx, cy + r * 0.42
-    ctx.set_source_rgb(*INK)
-    ctx.set_line_width(lw * .9)
-    if mouth == "flat":
-        ctx.move_to(mx - r * .2, my); ctx.line_to(mx + r * .2, my); ctx.stroke()
-    elif mouth == "smile":
-        ctx.arc(mx, my - r * .12, r * .26, math.pi * .15, math.pi * .85); ctx.stroke()
-    elif mouth == "smirk":
-        ctx.move_to(mx - r * .15, my + r * .02); ctx.curve_to(mx, my + r * .1, mx + r * .15, my, mx + r * .26, my - r * .12); ctx.stroke()
-    elif mouth == "frown":
-        ctx.arc(mx, my + r * .22, r * .22, math.pi * 1.15, math.pi * 1.85); ctx.stroke()
+            x = cx + fx + sx * eye_r
+            ctx.move_to(x - sx * r * 0.28, by - r * 0.16); ctx.line_to(x + sx * r * 0.22, by + r * 0.14); ctx.stroke()
+
+    # Mouth (Rico / PR2D style large expressive mouth)
+    mx, my = cx + fx + jx, cy + r * 0.52 + jy
+    ctx.set_source_rgb(*INK); ctx.set_line_width(lw)
+    if mouth in ("scream", "laugh"):
+        ctx.save(); ctx.translate(mx, my); ctx.scale(1.15, 1.35)
+        circle(ctx, 0, 0, r * 0.32, (0.12, 0.05, 0.05))
+        circle(ctx, 0, r * 0.12, r * 0.16, (0.85, 0.25, 0.25))  # Tongue
+        ctx.set_source_rgb(*INK); ctx.set_line_width(lw * 0.8); ctx.arc(0, 0, r * 0.32, 0, math.tau); ctx.stroke()
+        ctx.restore()
+    elif mouth == "grit":
+        outlined_box(ctx, mx - r * 0.34, my - r * 0.14, r * 0.68, r * 0.28, WHITE, lw=lw * 0.8, r=6)
+        ctx.move_to(mx - r * 0.32, my); ctx.line_to(mx + r * 0.32, my); ctx.stroke()
     elif mouth == "wobble":
-        ctx.move_to(mx - r * .22, my)
-        for i in range(1, 5):
-            ctx.line_to(mx - r * .22 + i * r * .11, my + (r * .06 if i % 2 else -r * .06))
+        ctx.move_to(mx - r * 0.32, my)
+        for i in range(1, 6):
+            ctx.line_to(mx - r * 0.32 + i * r * 0.13, my + (r * 0.09 if i % 2 else -r * 0.09))
         ctx.stroke()
-    elif mouth in ("o", "scream", "laugh"):
-        open_k = {"o": .15, "scream": .3, "laugh": .24}[mouth]
-        if mouth == "laugh":
-            open_k *= 0.8 + 0.2 * math.sin(t * 16)
-        ctx.save(); ctx.translate(mx, my + r * .04); ctx.scale(1, 1.15 if mouth != "laugh" else 0.9)
-        ctx.arc(0, 0, r * open_k, 0, math.tau); ctx.set_source_rgb(*INK); ctx.fill(); ctx.restore()
-        if mouth == "scream":
-            circle(ctx, mx, my + r * .17, r * .13, (0.85, 0.3, 0.3))
+    elif mouth == "smile":
+        ctx.arc(mx, my - r * 0.10, r * 0.30, math.pi * 0.15, math.pi * 0.85); ctx.stroke()
+    else:
+        ctx.arc(mx, my + r * 0.22, r * 0.26, math.pi * 1.15, math.pi * 1.85); ctx.stroke()
 
 # ----------------------------------------------------------------------------- accessories
 def _acc_head(ctx, kind, hx, hy, r):
@@ -448,7 +445,7 @@ def draw_prop(ctx, name, p, ang, t=0.0):
 
 # ----------------------------------------------------------------------------- character
 class Figure:
-    HEAD_R = 60
+    HEAD_R = 88
     TORSO = 190
     UARM, FARM = 100, 96
     THIGH, SHIN = 122, 124
@@ -508,7 +505,7 @@ class Figure:
             draw_prop(ctx, prop, J["hR"], ang if "rot" not in a or not a["rot"] else ang + a["rot"], t)
         limb(J["sh"], J["elR"], J["hR"])                                 # near arm
         hx, hy = J["head"]
-        circle(ctx, hx, hy, self.HEAD_R + 6, INK); circle(ctx, hx, hy, self.HEAD_R - 2, WHITE)
+        circle(ctx, hx, hy, self.HEAD_R + 7, INK); circle(ctx, hx, hy, self.HEAD_R - 1, (0.76, 0.76, 0.73))
         draw_face(ctx, hx, hy, self.HEAD_R, face, t)
         if head_acc:
             _acc_head(ctx, head_acc, hx, hy, self.HEAD_R)

@@ -213,12 +213,11 @@ def bg_vault(ctx):
     g.add_color_stop_rgba(0, 1, 1, .9, .22); g.add_color_stop_rgba(1, 1, 1, .9, 0)
     ctx.set_source(g); ctx.rectangle(0, 0, W, GROUND_Y); ctx.fill()
 
-def bg_stage(ctx, color="#2c3e66"):
-    vgrad(ctx, 0, GROUND_Y, shade(color, .55), shade(color, 1.05))
-    g = cairo.RadialGradient(W / 2, 760, 40, W / 2, 760, 820)
-    g.add_color_stop_rgba(0, 1, 1, 1, .32); g.add_color_stop_rgba(1, 1, 1, 1, 0)
-    ctx.set_source(g); ctx.rectangle(0, 0, W, H); ctx.fill()
-    vgrad(ctx, GROUND_Y, H, shade(color, .6), shade(color, .3))
+def bg_stage(ctx, color="#a5aa96"):
+    """Minimalist Rico Animations sage-paper / Avenu warm-grey paper canvas with subtle sketch vignette."""
+    vgrad(ctx, 0, H, shade(color, 1.03), shade(color, 0.92))
+    # Subtle hand-drawn horizon pencil line
+    line(ctx, (0, GROUND_Y - 10), (W, GROUND_Y + 8), INK, 6)
 
 SETTINGS = {
     "room": bg_room, "office": bg_office, "kitchen": bg_kitchen, "street": bg_street,
@@ -415,7 +414,7 @@ def draw_scene(ctx, scene, t, dur, genre="thriller"):
     elif cam == "whip":
         z = 1.06 + 0.45 * math.exp(-t * 9)
     elif cam == "snap_zoom":
-        z = 1.0 + 0.34 * ease(min(1, t / 0.16)) + 0.05 * k
+        z, fy = 1.55 + 0.55 * ease(min(1, t / 0.16)), 810   # Tight Rico/Avenu reaction close-up on the face!
     elif cam == "drift_up":
         z, fy = 1.12, fy0 + 150 - 300 * ease(k)
     sfx = scene.get("sfx", "none")

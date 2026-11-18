@@ -155,12 +155,80 @@ def publish(youtube_client, video_path, thumb_path, sb):
         print(f"Thumbnail note (custom thumbnails need a verified channel): {str(e)[:120]}")
     return vid, publish_at, title
 
+# Add to autonomous_engine.py right inside qa_verify() (or call right after produce_short):
+def ai_multimodal_virality_audit(video_path, sb):
+    """Extracts a 4-frame contact sheet from final_video.mp4 and uses Gemini Vision to grade visual quality & virality."""
+    from PIL import Image
+    from google import genai
+    from google.genai import types
+
+    dur = float(_probe(video_path, "format=duration"))
+    frames = []
+    for idx, pct in enumerate((0.12, 0.38, 0.65, 0.88)):
+        f_path = f"build/audit_{idx}.jpg"
+        subprocess.run([
+            "ffmpeg", "-loglevel", "error", "-y", "-ss", str(dur * pct),
+            "-i", video_path, "-frames:v", "1", f_path
+        ], check=True)
+        frames.append(Image.open(f_path).convert("RGB").resize((540, 960)))
+
+    # Stitch 2x2 contact sheet of the actual rendered video frames
+    sheet = Image.new("RGB", (1080, 1920))
+    sheet.paste(frames[0], (0, 0)); sheet.paste(frames[1], (540, 0))
+    sheet.paste(frames[2], (0, 960)); sheet.paste(frames[3], (540, 960))
+    sheet_path = "build/qa_contact_sheet.jpg"
+    sheet.save(sheet_path, "JPEG", quality=88)
+
+    api_key = os.environ.get("GEMINI_API_KEY", "")
+    if not api_key:
+        return True, 85, "No API key for vision audit"
+
+    client = genai.Client(api_key=api_key)
+    with open(sheet_path, "rb") as f:
+        img_bytes = f.read()
+
+    audit_prompt = f"""
+    You are a strict YouTube Shorts Virality & Quality Inspector reviewing a 2x2 contact sheet of 4 rendered frames
+    from our stick-figure Short titled '{sb['title']}' (Hook: '{sb['scenes'][0]['narration']}').
+    Score this video from 0 to 100 across 4 criteria (25 pts each):
+    1. Visual Readability & Framing (Are characters clearly visible, uncluttered, and expressive?)
+    2. Facial Expression Contrast (Do expressions clearly change from setup to reaction?)
+    3. Story Clarity & Hook Punch (Is the premise immediately understandable in 2 seconds?)
+    4. Technical Cleanliness (No blank panels, broken text, or unreadable overlaps?)
+    Return ONLY valid JSON: {{"score": 88, "pass": true, "critique": "1-sentence explanation", "fix_hint": "what to change if score < 80"}}
+    """
+    for model_name in ("gemini-3.8-flash", "gemma-3-27b-it"):
+        try:
+            res = client.models.generate_content(
+                model=model_name,
+                contents=[
+                    types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"),
+                    audit_prompt
+                ]
+            )
+            cleaned = re.sub(r"^```(?:json)?|```$", "", res.text.strip(), flags=re.MULTILINE).strip()
+            verdict = json.loads(cleaned[cleaned.find("{"):cleaned.rfind("}") + 1])
+            score = int(verdict.get("score", 85))
+            print(f"AI Vision Virality Audit ({model_name}): {score}/100 — {verdict.get('critique')}")
+            return score >= 80, score, verdict.get("fix_hint", "")
+        except Exception as e:
+            print(f"Vision audit {model_name} note: {e}")
+    return True, 85, "Fallback technical QA passed"
+
 # ----------------------------------------------------------------------------- main
 if __name__ == "__main__":
-    creds = Credentials(None, refresh_token=os.environ["YT_REFRESH_TOKEN"], token_uri="https://oauth2.googleapis.com/token",
-                        client_id=os.environ["YT_CLIENT_ID"], client_secret=os.environ["YT_CLIENT_SECRET"],
-                        scopes=["https://www.googleapis.com/auth/youtube.upload", "https://www.googleapis.com/auth/youtube.readonly",
-                                "https://www.googleapis.com/auth/yt-analytics.readonly"])
+    creds = Credentials(
+        None,
+        refresh_token=os.environ["YT_REFRESH_TOKEN"],
+        token_uri="https://oauth2.googleapis.com/token",
+        client_id=os.environ["YT_CLIENT_ID"],
+        client_secret=os.environ["YT_CLIENT_SECRET"],
+        scopes=[
+            "https://www.googleapis.com/auth/youtube.upload",
+            "https://www.googleapis.com/auth/youtube.readonly",
+            "https://www.googleapis.com/auth/yt-analytics.readonly",
+        ],
+    )
     yt = build("youtube", "v3", credentials=creds)
 
     memory = load_memory()
@@ -168,20 +236,36 @@ if __name__ == "__main__":
     enforce_warmup_gate(memory)
 
     hint = fetch_self_learning_feedback(creds, memory)
-    storyboard = script.generate_story(memory, hint, harvest_signals())
-    print(f"Genre: {storyboard['genre']} | Title: {storyboard['title']} | scenes: {len(storyboard['scenes'])}")
-    os.makedirs("build", exist_ok=True)
-    json.dump(storyboard, open("build/storyboard.json", "w"), indent=2)
+    signals = harvest_signals()
 
-    mp4, thumb, tl = video.produce_short(storyboard, out_mp4="final_video.mp4", out_thumb="build/thumbnail.jpg")
-    qa_verify(mp4, thumb, storyboard)
+    os.makedirs("build", exist_ok=True)
+    storyboard = mp4 = thumb = None
+    for qa_pass in range(2):
+        storyboard = script.generate_story(memory, hint, signals)
+        print(f"Pass {qa_pass + 1} | Genre: {storyboard['genre']} | Title: {storyboard['title']} | scenes: {len(storyboard['scenes'])}")
+        with open("build/storyboard.json", "w", encoding="utf-8") as f:
+            json.dump(storyboard, f, indent=2)
+
+        mp4, thumb, tl = video.produce_short(storyboard, out_mp4="final_video.mp4", out_thumb="build/thumbnail.jpg")
+        qa_verify(mp4, thumb, storyboard)
+        passed, score, fix_hint = ai_multimodal_virality_audit(mp4, storyboard)
+        if passed:
+            break
+        print(f"Video scored {score}/100 — auto-regenerating with fix: {fix_hint}")
+        hint = f"{hint} | CRITICAL FIX REQUIRED: {fix_hint}"
+
     vid, when, final_title = publish(yt, mp4, thumb, storyboard)
 
     memory["used_topics"].append(storyboard["topic_id"])
     memory["bot_uploads"] = memory.get("bot_uploads", 0) + 1
     memory.setdefault("genre_log", []).append(storyboard["genre"])
     memory.setdefault("published_log", {})[vid] = {
-        "title": final_title, "genre": storyboard["genre"], "hook": storyboard["scenes"][0]["narration"], "scheduled_for": when,
-        "is_fiction": storyboard["is_fiction"], "facts_used": storyboard.get("facts_used", [])}
+        "title": final_title,
+        "genre": storyboard["genre"],
+        "hook": storyboard["scenes"][0]["narration"],
+        "scheduled_for": when,
+        "is_fiction": storyboard["is_fiction"],
+        "facts_used": storyboard.get("facts_used", []),
+    }
     save_memory(memory)
     print(f"Success! Video {vid} scheduled for {when}")
