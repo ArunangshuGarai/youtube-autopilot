@@ -23,18 +23,20 @@ LIGHTING = ["day", "dusk", "night", "dark"]
 TRANSITIONS = ["cut", "flash", "black"]
 
 GENRE_BRIEF = {
-    "crime": """TRUE CRIME (stick-figure documentary). Tell ONE well-documented historical case (heist, con, escape, forgery, investigation twist) that you are CERTAIN is accurate.
-- Tone: cold, controlled, intense. Voice profile: "grave". Music: "dark" or "tense". Lighting mostly "night"/"dark" (use "day" for flashbacks).
-- Use specific numbers, dates and places. Escalate every scene. End on an ironic twist or chilling fact.
-- NO graphic violence, gore, weapons close-ups or glorification. Never accuse real living people. Never invent quotes. If a detail is uncertain, leave it out.""",
-    "thriller": """THRILLER (original short horror/suspense fiction, 'creepypasta' style). One tight situation, a ticking clock, a twist in the last two scenes.
-- Tone: whispery, tense, immersive first-person ("I"). Voice profile: "tense". Music: "tense", "dark" or "sneaky". Lighting "night"/"dark".
-- Use time stamps via overlay ("3:07 AM"). Short punchy sentences. A creepy final line that lingers.
-- No gore. Fictional: set "is_fiction": true.""",
-    "comedy": """COMEDY (relatable, sarcastic storytime). One everyday situation that spirals into absurdity, with a callback punchline.
-- Tone: jolly, fast, sarcastic. Voice profile: "jolly" or "sarcastic". Music: "quirky" or "upbeat". Lighting "day".
-- Rule of three, escalation, a sharp last line. Use comedic sfx (boing, fail, record_scratch, ding) and big reactions (shocked, facepalm, laugh, panic).
-- Clean humour only. Fictional: set "is_fiction": true.""",
+    "crime": """TRUE CRIME (stick-figure documentary). Tell ONE real, documented historical heist, prison escape, con, or detective twist.
+- Tone: intense, clear, chronological. Voice profile: "grave". Music: "dark" or "tense". Lighting: "night" or "dark".
+- State WHO, WHERE, and WHAT they wanted in Scene 1-2. Escalate the plan in Scenes 3-7. Land the real outcome/twist in Scenes 8-10.
+- Every scene MUST visually show the objects available in SET_PIECES and PROPS (safe, vault, bars, door, car, moneybag, cash, key, flashlight, handcuffs, magnifier).""",
+
+    "thriller": """THRILLER (grounded, crystal-clear suspense story). ONE relatable person alone at night notices a specific physical clue in their house, office, or street that leads to a chilling realization.
+- Tone: suspenseful, clear, step-by-step. Voice profile: "tense". Music: "tense" or "sneaky". Lighting: "night" or "dark".
+- NEVER write confusing abstract metaphors. Every sentence must describe a concrete physical action using ONLY things drawn on screen: phone, laptop, camera, flashlight, key, door, bed, couch, tv, car, window.
+- Follow a clear chain: Strange Event -> Checking Clue 1 -> Checking Clue 2 -> The Chilling Reveal.""",
+
+    "comedy": """COMEDY (Hilarious 'World's Dumbest Criminal' or 'Epic Real-Life Human Fail' storytime). Tell ONE absurdly funny, easy-to-follow story about a person or bungling thief whose "genius" plan backfires spectacularly.
+- Tone: sarcastic, punchy, deadpan storytelling (like Sam O'Nella Academy or Casually Explained). Voice profile: "sarcastic" or "jolly". Music: "sneaky" or "quirky". Lighting: "day".
+- STRICT RULE: NEVER write surreal/sci-fi nonsense (NO talking appliances, NO talking animals, NO magic). The humor must come from a human character making a hilariously dumb decision.
+- Every scene's action MUST use ONLY the visible rooms, furniture (door, safe, table, desk, car, bed, couch, bars, tv, fridge, wardrobe, chair), and hand props (phone, briefcase, moneybag, cash, pizza, coffee, laptop, sign, handcuffs, camera) so the viewer sees the exact joke happening on screen.""",
 }
 
 SCHEMA_DOC = f"""
@@ -42,26 +44,26 @@ Return ONLY valid JSON (no markdown) with this exact shape:
 {{
   "genre": "crime|thriller|comedy",
   "topic_id": "unique-kebab-slug",
-  "title": "<=55 chars, curiosity-driven, no hashtags",
+  "title": "<=55 chars, clear curiosity hook, no hashtags",
   "thumb_text": "2-3 ALL CAPS words",
-  "description": "2-3 sentences. If is_fiction is true, end with 'This is a fictional story.'",
+  "description": "2-3 clear sentences summarizing the story.",
   "tags": ["6 to 8 short tags"],
   "is_fiction": true,
   "facts_used": ["for true stories: the 4-8 concrete facts you rely on"],
   "voice_profile": "{'|'.join(VOICES)}",
   "music_mood": "{'|'.join(MOODS)}",
   "scenes": [ {{
-      "narration": "8-16 spoken words, 1-2 short sentences, written for the ear",
-      "delivery": "{'|'.join(DELIVERIES)}",
+      "narration": "8-14 simple, crystal-clear spoken words. One concrete action per scene.",
+      "delivery": "normal",
       "setting": "{'|'.join(SETTINGS)}",
       "lighting": "{'|'.join(LIGHTING)}",
       "camera": "{'|'.join(CAMERAS)}",
       "cast": [ {{ "role": "{'|'.join(ROLES)}", "pose": "one of POSES", "face": "one of FACES", "x": 0.15-0.85, "facing": "left|right", "prop": "optional", "fx": "optional" }} ],
       "set_piece": {{ "name": "optional, one of SET_PIECES", "x": 0.15-0.85 }},
-      "overlay": "optional short stamp like '3:07 AM' or 'ONE WEEK LATER'",
-      "sfx": "one of SFX", "sfx_at": 0.0,
+      "overlay": "optional short context stamp like 'BOSTON 1950' or 'STEP 1: THE DUMB PLAN'",
+      "sfx": "one of SFX", "sfx_at": 0.05,
       "transition": "{'|'.join(TRANSITIONS)}",
-      "emphasis": ["1-2 narration words to highlight in the captions"]
+      "emphasis": ["1-2 key narration words to highlight in captions"]
   }} ]
 }}
 POSES: {', '.join(POSES)}
@@ -74,14 +76,11 @@ SFX: {', '.join(SFX)}
 
 CRAFT_RULES = """
 CRAFT RULES (follow all):
-- 9 to 11 scenes. Total narration 95-125 words (about 40-45 seconds). Never exceed 130 words.
-- Scene 1 is the HOOK: starts mid-action, a shocking claim or question, max 12 words, delivery "slow" or "fast", camera "snap_zoom" or "push_in", with an sfx.
-- Every scene must change something visually (setting, camera, pose, expression, cast). Never repeat the same camera twice in a row.
-- Match poses/faces to the narration beat (fear -> scared/cower, reveal -> shocked/exclaim, scheming -> sly/sneak, joke -> laugh/dance).
-- Use sfx on roughly every 2nd or 3rd scene, on the big beats only. Use overlays only for time/place jumps.
-- Max 2 characters per scene; keep roles consistent (the protagonist is always "hero" unless the story is a historical case, then use fitting roles).
-- Write for the ear: short sentences, contractions, no parentheses, numbers written the way they are spoken. Spell out initials in capitals (FBI) so they are read as letters.
-- The final scene must land the twist/punchline and be under 12 words.
+- 9 to 10 scenes. Total narration 90-115 words (about 38-42 seconds).
+- CLARITY FIRST: A 12-year-old watching on mute or listening with eyes closed must immediately understand WHO the character is, WHAT problem they face, and WHAT happens next. No cryptic riddles or disconnected sentences.
+- VISUAL LOCK: Never mention an object in narration unless it is in PROPS or SET_PIECES and placed in that scene's `prop` or `set_piece` field! If the character talks about a phone, give them `prop: "phone"`. If they hide in a wardrobe or open a safe, set `set_piece: {"name": "wardrobe"}` or `{"name": "safe"}`.
+- Scene 1 MUST set up the exact premise in plain English (e.g., "In 1995, a man walked into two Pittsburgh banks wearing lemon juice on his face.") and display a 2-to-3-word `overlay` banner stating the topic.
+- Keep `delivery` set to "normal" for smooth, natural narration pacing.
 - Do NOT repeat any topic from the USED list.
 """
 
