@@ -207,13 +207,14 @@ def generate_story(memory, analytics_hint="", signals=None):
     genre = pick_genre(memory)
     used = memory.get("used_topics", [])
     facts = research_facts(genre, used)
+    facts_block = ("VERIFIED FACTS TO BUILD ON (use only these, do not add other factual claims):\n" + facts) if facts else ""
     prompt = f"""You are the head writer of a viral faceless YouTube Shorts channel that uses animated stick figures.
 {GENRE_BRIEF[genre]}
 {CRAFT_RULES}
 USED topics (never repeat): {json.dumps(used[-40:])}
 What recently performed well on this channel: {analytics_hint or 'n/a'}
 Inspiration (optional, ignore if not a good fit): {json.dumps((signals or [])[:8])}
-{('VERIFIED FACTS TO BUILD ON (use only these, do not add other factual claims):\n' + facts) if facts else ''}
+{facts_block}
 {SCHEMA_DOC}"""
     for attempt in range(3):
         raw = _gemini_text(prompt) or _pollinations_text(prompt)
