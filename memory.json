@@ -11,7 +11,8 @@
     "the-great-toaster-uprising",
     "brinks-robbery-1950",
     "text-from-my-own-number",
-    "photo-from-behind-wardrobe"
+    "photo-from-behind-wardrobe",
+    "burglar-calls-911-store-lock"
   ],
   "published_log": {
     "TREDHWTKPnU": {
@@ -92,14 +93,51 @@
       "scheduled_for": "2026-11-18T16:23:22Z",
       "is_fiction": true,
       "facts_used": []
+    },
+    "oSVywk3J4sc": {
+      "title": "Robber Calls 911 on Himself After 1 Mistake",
+      "genre": "comedy",
+      "hook": "Three a.m. I trapped myself inside the store I came to rob.",
+      "hook_score": 53,
+      "thumb_text": "ACCIDENTAL ARREST",
+      "queries": [
+        "dumbest criminal calls 911",
+        "robber locks himself inside store",
+        "thief trapped during robbery"
+      ],
+      "scheduled_for": "2026-11-19T18:53:03Z",
+      "is_fiction": false,
+      "facts_used": [
+        "Burglar broke into a commercial building after business hours",
+        "Interior security latch auto-locked from the outside without an interior key",
+        "Burglar accidentally tripped the alarm trying to break the security camera",
+        "Suspect used an office phone to dial 911 seeking rescue from inside",
+        "Police arrived and freed the suspect directly into custody"
+      ]
     }
   },
   "channel_synced": true,
-  "bot_uploads": 7,
+  "bot_uploads": 8,
   "genre_log": [
     "comedy",
     "crime",
     "thriller",
-    "thriller"
-  ]
+    "thriller",
+    "comedy"
+  ],
+  "scout": {
+    "date": "2026-11-19",
+    "titles": [
+      "[crime] 'Rat Me Mat Kholna Iske Darwaze..\ud83d\udeaa\ud83d\ude30 Horror Story #shorts #mystery #trending' (820,756 views, 547.2x its channel's size)",
+      "[crime] 'she came from another World \ud83d\ude31 , Unsolved Mystery, Episode 9  #nikmultiverse #shorts' (592,652 views, 222.0x its channel's size)",
+      "[crime] 'TMKOC Unsolved Mysteries\ud83d\ude31\ud83e\udd14#ytshorts #shorts #tmkoc #jethalal #daya #babita #facts #champak' (1,527,780 views, 69.1x its channel's size)",
+      "[crime] 'Rahasmayi Taalab..\ud83d\ude31\ud83d\udd25 Horror Story #shorts #mystery #trending' (102,045 views, 68.0x its channel's size)",
+      "[crime] 'TMKOC Unexplained Scenes\ud83e\udd14\ud83d\ude31#ytshorts #shorts #tmkoc #daya #jethalal #champaklal #babita #my' (844,078 views, 38.2x its channel's size)",
+      "[crime] 'CID UNSOLVED MYSTERIES! \ud83d\ude31' (208,248 views, 35.8x its channel's size)"
+    ]
+  },
+  "api_budget": {
+    "date": "2026-11-19",
+    "calls": 1
+  }
 }
