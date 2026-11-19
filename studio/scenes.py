@@ -372,6 +372,72 @@ def fx_rain(ctx, t):
         x = rnd.uniform(-100, W + 100); sp = rnd.uniform(1.4, 2.4); y0 = ((rnd.random() * H) + t * 1500 * sp) % (H + 200) - 100
         ctx.move_to(x, y0); ctx.line_to(x - 22, y0 + 70); ctx.stroke()
 
+
+def fx_ambient(ctx, t, lighting):
+    """Slow drifting particles so 'static' backgrounds never feel frozen: dust motes by day, fog + embers at night."""
+    rnd = random.Random(21)
+    if lighting in ("night", "dark"):
+        for i in range(4):                                     # drifting fog bands
+            y = 520 + i * 250 + 30 * math.sin(t * .5 + i)
+            x = ((rnd.random() * W * 1.6) + t * (18 + i * 7)) % (W * 1.6) - W * .3
+            g = cairo.RadialGradient(x, y, 10, x, y, 420)
+            g.add_color_stop_rgba(0, .75, .8, .95, .10); g.add_color_stop_rgba(1, .75, .8, .95, 0)
+            ctx.set_source(g); ctx.rectangle(0, 0, W, H); ctx.fill()
+    for _ in range(26):
+        x = (rnd.random() * W + t * rnd.uniform(6, 22)) % W
+        y = (rnd.random() * H * .85 - t * rnd.uniform(4, 16)) % (H * .85)
+        r = rnd.uniform(2, 5.5)
+        a = (.20 if lighting in ("night", "dark") else .32) * (0.6 + 0.4 * math.sin(t * 1.5 + x))
+        circle(ctx, x, y, r, "#fff6d0" if lighting not in ("night", "dark") else "#b8c4ff", a)
+
+POPUP = {"boom": "BOOM!", "slam": "SLAM!", "hit": "WHAM!", "fail": "FAIL!", "cash": "$$$", "knock": "KNOCK KNOCK",
+         "boing": "BOING!", "ding": "DING!", "record_scratch": "WAIT, WHAT?", "siren": "BUSTED!"}
+POPUP_DARK = {"boom", "slam", "knock", "siren", "hit"}          # the only ones allowed in thriller / crime
+
+def draw_popup(ctx, sfx, t, t_hit, genre):
+    word = POPUP.get(sfx)
+    if not word or (genre != "comedy" and sfx not in POPUP_DARK):
+        return
+    age = t - t_hit
+    if not 0 <= age < 0.85:
+        return
+    k = ease_out_back(min(1, age / .16)) * (1 - max(0, (age - .55) / .3))
+    col = (1.0, 0.86, 0.15) if genre == "comedy" else (1.0, 0.3, 0.22)
+    surf, w, h = text_surface([(word, col)], 150, FONT_COMIC, stroke=14, max_width=820)
+    ctx.save(); ctx.translate(W * .68, 700); ctx.rotate(math.radians(-9)); ctx.scale(max(k, .01), max(k, .01))
+    ctx.set_source_surface(surf, -w / 2, -h / 2); ctx.paint(); ctx.restore()
+
+def draw_hook_card(ctx, text, t):
+    """First ~2.3s: the on-screen half of the hook (different words from the spoken line, per yt-shorts)."""
+    if t > 2.5:
+        return
+    k = ease_out_back(min(1, t / .2))
+    out = max(0.0, (t - 2.15) / .35)
+    surf, w, h = text_surface([(text.upper(), (0.07, 0.07, 0.08))], 150, FONT_COMIC, stroke=0, shadow=False, max_width=860)
+    ctx.save(); ctx.translate(W / 2, 330 - out * 400); ctx.rotate(math.radians(-2.5)); ctx.scale(.55 + .45 * k, .55 + .45 * k)
+    outlined_box(ctx, -w / 2 - 34, -h / 2 - 22, w + 68, h + 44, "#ffd23f", lw=9, r=14)
+    ctx.set_source_surface(surf, -w / 2, -h / 2 - 4); ctx.paint(); ctx.restore()
+
+def draw_cta(ctx, text, t, dur):
+    """Last ~2.6s: a pinned 'comment' that makes viewers pick a side (comments feed the algorithm, and it holds the loop)."""
+    start = max(0.4, dur - 2.7)
+    if not text or t < start:
+        return
+    k = ease_out_back(min(1, (t - start) / .3))
+    words = text.split()
+    half = max(1, len(words) // 2) if len(text) > 30 else len(words)
+    lines = [" ".join(words[:half]), " ".join(words[half:])] if half < len(words) else [text]
+    surfs = [text_surface([(ln, (0.07, 0.07, 0.08))], 62, FONT_COMIC, stroke=0, shadow=False, max_width=800) for ln in lines]
+    bw = max(sf[1] for sf in surfs) + 150
+    bh = sum(sf[2] for sf in surfs) + 70
+    ctx.save(); ctx.translate(W / 2, 370); ctx.scale(.7 + .3 * k, .7 + .3 * k)
+    outlined_box(ctx, -bw / 2, -bh / 2, bw, bh, "#ffffff", lw=7, r=26)
+    circle(ctx, -bw / 2 + 62, 0, 30, "#ff3d3d"); circle(ctx, -bw / 2 + 62, -6, 11, "#ffffff"); circle(ctx, -bw / 2 + 62, 20, 17, "#ffffff", .9)
+    y = -bh / 2 + 28
+    for sf, w, h in surfs:
+        ctx.set_source_surface(sf, -bw / 2 + 112, y); ctx.paint(); y += h
+    ctx.restore()
+
 # ============================================================================= director: draws one scene frame
 LIGHT = {"day": None, "dusk": (0.35, 0.12, 0.28, 0.22), "night": (0.03, 0.06, 0.22, 0.5), "dark": (0.0, 0.0, 0.05, 0.62)}
 HIT_SFX = {"hit", "boom", "sting", "slam", "crash"}
@@ -387,7 +453,7 @@ def _norm_cast(scene):
                         fx=c.get("fx")))
     return out or [dict(role="hero", pose="idle", face="neutral", x=W / 2, facing=1, prop=None, scale=1.05, fx=None)]
 
-def draw_scene(ctx, scene, t, dur, genre="thriller"):
+def draw_scene(ctx, scene, t, dur, genre="thriller", punch=0.0):
     cast = _norm_cast(scene)
     setting = scene.get("setting", "room")
     lighting = scene.get("lighting") or ("night" if genre in ("thriller", "crime") else "day")
@@ -422,12 +488,14 @@ def draw_scene(ctx, scene, t, dur, genre="thriller"):
     if sfx in HIT_SFX and t > t_hit:
         z *= 1 + 0.07 * math.exp(-(t - t_hit) * 9)
         shake = max(shake, 16 * math.exp(-(t - t_hit) * 8))
+    z *= 1 + 0.055 * punch                                     # zoom punch on every stressed word
     z = max(z, 1.05)                                           # margin so shake/pans never show the world edge
     half_w, half_h = W / (2 * z) + 30, H / (2 * z) + 30
     fx = min(max(fx, half_w), W - half_w)
     fy = min(max(fy, half_h), H - half_h)
     rnd = random.Random(int(t * 30))
     sx, sy = (rnd.uniform(-1, 1) * shake, rnd.uniform(-1, 1) * shake) if shake else (0, 0)
+    sx += 4 * math.sin(t * 1.7); sy += 3 * math.cos(t * 1.3)      # hand-held sway: nothing ever sits perfectly still
 
     ctx.save()
     ctx.translate(W / 2 + sx, H / 2 + sy); ctx.rotate(rot); ctx.scale(z, z); ctx.translate(-fx, -fy)
@@ -486,15 +554,22 @@ def draw_scene(ctx, scene, t, dur, genre="thriller"):
         rect(ctx, 0, 0, W, H, "#000000", 1 - t / .18)
     if sfx in HIT_SFX and 0 <= t - t_hit < .07:
         rect(ctx, 0, 0, W, H, "#ffffff", .35)
+    fx_ambient(ctx, t, lighting)
     # vignette
     g = cairo.RadialGradient(W / 2, H * .45, H * .28, W / 2, H * .45, H * .75)
     vig = .55 if genre in ("thriller", "crime") else .28
     g.add_color_stop_rgba(0, 0, 0, 0, 0); g.add_color_stop_rgba(1, 0, 0, 0, vig)
     ctx.set_source(g); ctx.rectangle(0, 0, W, H); ctx.fill()
 
+    draw_popup(ctx, sfx, t, t_hit, genre)
+    if scene.get("hook_card"):
+        draw_hook_card(ctx, scene["hook_card"], t)
+    if scene.get("cta"):
+        draw_cta(ctx, scene["cta"], t, dur)
+
     # overlay stamp ("3:07 AM", "ONE WEEK LATER")
     ov = scene.get("overlay")
-    if ov:
+    if ov and not (scene.get("hook_card") and t < 2.6):        # the hook card owns the top of the frame for the first seconds
         slide = ease_out_back(min(1, t / .3))
         surf, w, h = text_surface([(str(ov).upper(), (0.07, 0.07, 0.08))], 74, FONT_COMIC, stroke=0, shadow=False, max_width=900)
         ctx.save(); ctx.translate(58 - (1 - slide) * 700, 190); ctx.rotate(math.radians(-3))
@@ -533,6 +608,7 @@ def draw_caption(ctx, chunks, t, emphasis=(), y_center=1500):
         parts.append((clean, YELLOW if (w["start"] - .02 <= t < w["end"] + .04) else base))
     surf, w, h = text_surface(parts, 128, FONT_CAPTION, stroke=11, max_width=960)
     since = t - active[0]["start"]
-    pop = 1.0 + 0.2 * max(0.0, 1 - since / 0.11)
+    stressed = any(w["text"].strip(".,!?;:").lower() in emphasis and w["start"] - .02 <= t < w["end"] + .04 for w in active)
+    pop = 1.0 + 0.2 * max(0.0, 1 - since / 0.11) + (0.10 if stressed else 0.0)
     ctx.save(); ctx.translate(W / 2, y_center); ctx.scale(pop, pop)
     ctx.set_source_surface(surf, -w / 2, -h / 2); ctx.paint(); ctx.restore()
