@@ -12,8 +12,8 @@ from . import scenes as S
 from .stickman import W, H
 
 FPS = 30
-LEAD = 0.12          # visuals pop before the voice starts
-TAIL = 0.28          # breathing room after each scene's narration
+LEAD = 0.10          # visuals pop just before the voice starts
+TAIL = 0.18          # tight Shorts pacing — zero dead air between cuts
 
 def build_audio_timeline(sb, workdir):
     """Synthesize every scene, then lay them on one timeline. Returns dict with arrays, starts, durations, words."""

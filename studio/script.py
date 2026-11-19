@@ -87,6 +87,7 @@ Return ONLY valid JSON (no markdown, no commentary after it) with this exact sha
       "cast": [ {{ "role": "{'|'.join(ROLES)}", "pose": "one of POSES", "face": "one of FACES", "x": 0.15-0.85, "facing": "left|right", "prop": "optional", "fx": "optional" }} ],
       "set_piece": {{ "name": "optional, one of SET_PIECES", "x": 0.15-0.85 }},
       "overlay": "optional 2-4 word context stamp like 'BOSTON 1950' or 'HOUR THREE'",
+      "closeup_card": "optional 2-5 ALL CAPS words for the phone alert or sign shown on the TURN or TWIST beat (e.g. 'NEW TEXT: HE IS INSIDE')",
       "sfx": "one of SFX", "sfx_at": 0.05,
       "transition": "{'|'.join(TRANSITIONS)}",
       "emphasis": ["the 1-2 words the narrator stresses"]
@@ -101,22 +102,19 @@ SFX: {', '.join(SFX)}
 """
 
 CRAFT_RULES = """
-STRUCTURE - exactly 10 scenes, one spoken line each (about 3-4.5 seconds per line):
- 1 HOOK      cold open in the middle of the most shocking moment. No greeting, no context, no 'imagine'. Fragments are good ('Eleven men. Rubber masks.').
- 2 STAKES    who, where, what is at risk, in plain words - and open ONE question the viewer needs answered. Never answer it before scene 9.
- 3-4 BUILD   every scene adds a NEW fact or action. No scene may restate the one before it.
- 5 TURN      a 'But', 'Then' or 'Except' that changes the situation (this re-hooks anyone about to swipe at ~40%).
- 6-8 ESCALATE the stakes rise every scene, lines get shorter, each contains a number, time, name or object.
- 9 TWIST     answer the open question with the surprise.
- 10 LOOP     a last line that echoes or flips the hook so replaying feels natural. No 'thanks for watching', no 'subscribe'.
+STRUCTURE - 8 to 9 tight scenes (total 24-30 seconds for 90%+ Shorts completion):
+ 1 HOOK      cold open mid-action in the first 1.5s. Max 12 words. Use short fragments ('Three a.m. My phone buzzed.').
+ 2 STAKES    establish what is at risk and open ONE unanswered question.
+ 3-4 BUILD   every scene adds a concrete new visual action.
+ 5 TURN      a sudden 'But' or 'Then' that flips the situation + include a `closeup_card` showing the clue.
+ 6-7 ESCALATE lines get shorter and faster; tension peaks.
+ 8 TWIST+LOOP reveal the shocking twist with a `closeup_card` and end on a punchy line that makes viewers replay.
 
 WRITING RULES
-- 100-125 words in total; each line 6-16 words; plain words a 12-year-old gets; concrete nouns and verbs; one idea per line.
+- 70-95 words total (6-13 words per scene). Conversational US English with contractions ('didn't', 'couldn't', 'I froze').
+- POV RULE: For 'thriller' and 'comedy', ALWAYS write in urgent first-person ('I', 'my') — NEVER third-person ('Alex walked...').
+- VISUAL LOCK: Only mention props/furniture that exist in PROPS or SET_PIECES and place them in that scene.
 - BANNED phrases: imagine, picture this, let me tell you, in this video, did you know, little did, you won't believe, buckle up, welcome, hey guys.
-- CLARITY: someone watching on mute must still understand who, what and where from the pictures plus the 2-4 word overlays.
-- VISUAL LOCK: only mention objects that exist in PROPS or SET_PIECES, and put them in that scene's `prop` or `set_piece`.
-- RETENTION: change pose AND face between consecutive scenes, never repeat a camera twice in a row, put an `fx` or `sfx` on the turn and the twist, use `delivery` "slow"/"whisper" before a reveal and "fast" in the escalation.
-- Never repeat a topic from the USED list.
 
 PACKAGING RULES (the title and thumbnail are one unit)
 - Title: <=55 chars, subject first, one number/year/name, no vague hype words (insane, crazy, secret, ultimate), at most one ALL-CAPS word.
@@ -287,6 +285,7 @@ def normalize(sb, genre):
             setting=_pick(sc.get("setting"), SETTINGS, "room"), lighting=_pick(sc.get("lighting"), LIGHTING, "night" if genre != "comedy" else "day"),
             camera=_pick(sc.get("camera"), CAMERAS, "push_in"), cast=cast, set_piece=sp,
             overlay=(str(sc["overlay"])[:28].upper() if sc.get("overlay") else None),
+            closeup_card=(str(sc["closeup_card"])[:34] if sc.get("closeup_card") else None),
             sfx=_pick(sc.get("sfx"), SFX, "none"), sfx_at=sfx_at,
             transition=_pick(sc.get("transition"), TRANSITIONS, "cut"),
             emphasis=[re.sub(r"[^a-z0-9']", "", str(w).lower()) for w in (sc.get("emphasis") or [])][:3]))
@@ -316,7 +315,7 @@ def normalize(sb, genre):
     words = sum(len(s["narration"].split()) for s in scenes)
     if words > 150:
         raise ValueError(f"narration too long ({words} words)")
-    if words < 60:
+    if words < 45:
         raise ValueError(f"narration too short ({words} words)")
 
     # ---- packaging ----------------------------------------------------------------------------------------

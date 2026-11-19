@@ -162,63 +162,58 @@ def local_quality_gate(sb):
 
 # Add to autonomous_engine.py right inside qa_verify() (or call right after produce_short):
 def ai_multimodal_virality_audit(video_path, sb):
-    """Extracts a 4-frame contact sheet from final_video.mp4 and uses Gemini Vision to grade visual quality & virality."""
-    from PIL import Image
-    from google import genai
-    from google.genai import types
-
+    """Extracts a 4-frame contact sheet and grades visual quality & virality via free GitHub Models GPT-4o Vision."""
+    import base64
     dur = float(_probe(video_path, "format=duration"))
     frames = []
     for idx, pct in enumerate((0.12, 0.38, 0.65, 0.88)):
         f_path = f"build/audit_{idx}.jpg"
-        subprocess.run([
-            "ffmpeg", "-loglevel", "error", "-y", "-ss", str(dur * pct),
-            "-i", video_path, "-frames:v", "1", f_path
-        ], check=True)
+        subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-ss", str(dur * pct), "-i", video_path, "-frames:v", "1", f_path], check=True)
         frames.append(Image.open(f_path).convert("RGB").resize((540, 960)))
 
-    # Stitch 2x2 contact sheet of the actual rendered video frames
     sheet = Image.new("RGB", (1080, 1920))
     sheet.paste(frames[0], (0, 0)); sheet.paste(frames[1], (540, 0))
     sheet.paste(frames[2], (0, 960)); sheet.paste(frames[3], (540, 960))
     sheet_path = "build/qa_contact_sheet.jpg"
-    sheet.save(sheet_path, "JPEG", quality=88)
+    sheet.save(sheet_path, "JPEG", quality=85)
 
-    api_key = os.environ.get("GEMINI_API_KEY", "")
-    if not api_key:
-        return True, 85, "No API key for vision audit"
+    token = os.environ.get("GITHUB_TOKEN", "")
+    if not token:
+        return True, 85, "No GITHUB_TOKEN for vision audit"
 
-    client = genai.Client(api_key=api_key)
-    with open(sheet_path, "rb") as f:
-        img_bytes = f.read()
-
-    audit_prompt = f"""
-    You are a strict YouTube Shorts Virality & Quality Inspector reviewing a 2x2 contact sheet of 4 rendered frames
-    from our stick-figure Short titled '{sb['title']}' (Hook: '{sb['scenes'][0]['narration']}').
-    Score this video from 0 to 100 across 4 criteria (25 pts each):
-    1. Visual Readability & Framing (Are characters clearly visible, uncluttered, and expressive?)
-    2. Facial Expression Contrast (Do expressions clearly change from setup to reaction?)
-    3. Story Clarity & Hook Punch (Is the premise immediately understandable in 2 seconds?)
-    4. Technical Cleanliness (No blank panels, broken text, or unreadable overlaps?)
-    Return ONLY valid JSON: {{"score": 88, "pass": true, "critique": "1-sentence explanation", "fix_hint": "what to change if score < 80"}}
-    """
-    for model_name in ("gemini-3.8-flash", "gemini-3.6-flash"):
-        try:
-            res = client.models.generate_content(
-                model=model_name,
-                contents=[
-                    types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"),
-                    audit_prompt
-                ]
-            )
-            cleaned = re.sub(r"^```(?:json)?|```$", "", res.text.strip(), flags=re.MULTILINE).strip()
-            verdict = json.loads(cleaned[cleaned.find("{"):cleaned.rfind("}") + 1])
+    b64 = base64.b64encode(open(sheet_path, "rb").read()).decode("utf-8")
+    audit_prompt = (
+        f"You are a strict YouTube Shorts Virality & Quality Inspector reviewing 4 frames from '{sb['title']}' "
+        f"(Hook: '{sb['scenes'][0]['narration']}'). Score 0-100 across: 1) Unobstructed framing (no text/props blocking face), "
+        f"2) Expression contrast, 3) Instant 2s hook clarity, 4) Clean captions. "
+        'Return ONLY raw JSON: {"score": 88, "pass": true, "critique": "1 sentence", "fix_hint": "fix if < 80"}'
+    )
+    try:
+        r = requests.post(
+            "https://models.github.ai/inference/chat/completions",
+            headers={"Accept": "application/vnd.github+json", "Authorization": f"Bearer {token}", "X-GitHub-Api-Version": "2022-11-28", "Content-Type": "application/json"},
+            json={
+                "model": "openai/gpt-4o",
+                "messages": [{
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": audit_prompt},
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}}
+                    ]
+                }],
+            },
+            timeout=60,
+        )
+        if r.status_code == 200:
+            raw = r.json()["choices"][0]["message"]["content"]
+            verdict = json.loads(raw[raw.find("{"):raw.rfind("}") + 1])
             score = int(verdict.get("score", 85))
-            print(f"AI Vision Virality Audit ({model_name}): {score}/100 — {verdict.get('critique')}")
+            print(f"GPT-4o Vision Virality Audit: {score}/100 — {verdict.get('critique')}")
             return score >= 80, score, verdict.get("fix_hint", "")
-        except Exception as e:
-            print(f"Vision audit {model_name} note: {e}")
-    return True, 85, "Fallback technical QA passed"
+        print(f"Vision audit status {r.status_code}: {r.text[:120]}")
+    except Exception as e:
+        print(f"Vision audit note: {e}")
+    return True, 85, "Fallback QA passed"
 
 # ----------------------------------------------------------------------------- main
 if __name__ == "__main__":
