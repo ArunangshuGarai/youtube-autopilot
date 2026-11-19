@@ -17,7 +17,7 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
-from studio import script, video
+from studio import learn, packaging, script, video
 
 MEMORY_FILE = "memory.json"
 BROWSER_HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"}
@@ -124,25 +124,21 @@ def qa_verify(video_path, thumb_path, sb):
     print(f"QA passed: {dur:.1f}s, {os.path.getsize(video_path) / 1e6:.1f}MB")
 
 # ----------------------------------------------------------------------------- upload
-HASHTAGS = {"crime": "#truecrime #mystery #history #shorts", "thriller": "#horrorstories #scary #creepy #shorts", "comedy": "#funny #comedy #storytime #shorts"}
-
 def publish(youtube_client, video_path, thumb_path, sb):
+    seo = packaging.build_seo(sb)
     publish_at = (datetime.now(timezone.utc) + timedelta(minutes=random.randint(15, 35))).strftime("%Y-%m-%dT%H:%M:%SZ")
-    title = sb["title"][:90].rstrip()
-    if "#shorts" not in title.lower():
-        title = f"{title[:60]} #Shorts"
     body = {
         "snippet": {
-            "title": title,
-            "description": f"{sb['description']}\n\n{HASHTAGS[sb['genre']]}",
-            "tags": sb.get("tags", [])[:8],
-            "categoryId": "24",                        # Entertainment
+            "title": seo["title"],                         # <=58 chars, subject first; #Shorts lives in the description (saves title space)
+            "description": seo["description"],
+            "tags": seo["tags"],
+            "categoryId": "24",                            # Entertainment
             "defaultLanguage": "en-US", "defaultAudioLanguage": "en-US",
         },
         "status": {
             "privacyStatus": "private", "publishAt": publish_at,
             "selfDeclaredMadeForKids": False,
-            "containsSyntheticMedia": False,           # "Altered or synthetic content": No (stylised animation + TTS narrator)
+            "containsSyntheticMedia": False,               # "Altered or synthetic content": No (stylised animation + TTS narrator)
             "embeddable": True, "publicStatsViewable": True,
         },
     }
@@ -153,7 +149,16 @@ def publish(youtube_client, video_path, thumb_path, sb):
         youtube_client.thumbnails().set(videoId=vid, media_body=MediaFileUpload(thumb_path, mimetype="image/jpeg")).execute()
     except Exception as e:
         print(f"Thumbnail note (custom thumbnails need a verified channel): {str(e)[:120]}")
-    return vid, publish_at, title
+    print(f"SEO: title='{seo['title']}' | tags={len(seo['tags'])} | hashtags={seo['hashtags']} | query coverage={seo['coverage']}")
+    return vid, publish_at, seo["title"]
+
+def local_quality_gate(sb):
+    """Free gate (no API call): returns (ok, fix_hint). A weak hook is the one flaw worth a regeneration."""
+    h = packaging.score_hook(sb["scenes"][0]["narration"])
+    print("GATE:", packaging.package_report(sb))
+    if h["verdict"] < 40:
+        return False, f"The opening line scored {h['verdict']}/100 (weakest: {h['weakest']}). Rewrite it: {packaging.HOOK_FIX.get(h['weakest'], '')}."
+    return True, ""
 
 # Add to autonomous_engine.py right inside qa_verify() (or call right after produce_short):
 def ai_multimodal_virality_audit(video_path, sb):
@@ -235,23 +240,31 @@ if __name__ == "__main__":
     sync_existing_channel_history(yt, memory)
     enforce_warmup_gate(memory)
 
-    hint = fetch_self_learning_feedback(creds, memory)
-    signals = harvest_signals()
+    hint = learn.learn_from_analytics(creds, memory) or fetch_self_learning_feedback(creds, memory)
+    signals = learn.viral_scout(yt, memory) + harvest_signals()
 
     os.makedirs("build", exist_ok=True)
+    use_vision = os.environ.get("VISION_AUDIT", "").strip() == "1"      # off by default: it costs 1-2 extra Gemini calls per video
     storyboard = mp4 = thumb = None
     for qa_pass in range(2):
         storyboard = script.generate_story(memory, hint, signals)
+        ok, fix = local_quality_gate(storyboard)
+        if not ok and qa_pass == 0 and memory.get("api_budget", {}).get("calls", 0) < 10:
+            print(f"Local gate asked for a rewrite: {fix}")
+            hint = f"{hint} | CRITICAL FIX REQUIRED: {fix}"
+            continue
         print(f"Pass {qa_pass + 1} | Genre: {storyboard['genre']} | Title: {storyboard['title']} | scenes: {len(storyboard['scenes'])}")
         with open("build/storyboard.json", "w", encoding="utf-8") as f:
             json.dump(storyboard, f, indent=2)
 
         mp4, thumb, tl = video.produce_short(storyboard, out_mp4="final_video.mp4", out_thumb="build/thumbnail.jpg")
         qa_verify(mp4, thumb, storyboard)
+        if not use_vision:
+            break
         passed, score, fix_hint = ai_multimodal_virality_audit(mp4, storyboard)
         if passed:
             break
-        print(f"Video scored {score}/100 — auto-regenerating with fix: {fix_hint}")
+        print(f"Video scored {score}/100 - auto-regenerating with fix: {fix_hint}")
         hint = f"{hint} | CRITICAL FIX REQUIRED: {fix_hint}"
 
     vid, when, final_title = publish(yt, mp4, thumb, storyboard)
@@ -263,6 +276,9 @@ if __name__ == "__main__":
         "title": final_title,
         "genre": storyboard["genre"],
         "hook": storyboard["scenes"][0]["narration"],
+        "hook_score": packaging.score_hook(storyboard["scenes"][0]["narration"])["verdict"],
+        "thumb_text": storyboard.get("thumb_text"),
+        "queries": storyboard.get("seo", {}).get("queries", []),
         "scheduled_for": when,
         "is_fiction": storyboard["is_fiction"],
         "facts_used": storyboard.get("facts_used", []),

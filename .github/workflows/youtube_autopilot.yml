@@ -70,6 +70,10 @@ jobs:
           VOICE_SARCASTIC: ${{ vars.VOICE_SARCASTIC }}
           GEMINI_TEXT_MODELS: ${{ vars.GEMINI_TEXT_MODELS }}
           FORCE_GENRE: ${{ vars.FORCE_GENRE }}
+          GEMINI_DAILY_BUDGET: ${{ vars.GEMINI_DAILY_BUDGET }}   # max text/image calls per day (default 14)
+          GEMINI_IMAGE_MODEL: ${{ vars.GEMINI_IMAGE_MODEL }}     # optional: an image-capable Gemini model for 3D-style thumbnail backgrounds
+          THUMB_AI: ${{ vars.THUMB_AI }}                         # set to 0 to disable the free Pollinations background
+          VISION_AUDIT: ${{ vars.VISION_AUDIT }}                 # set to 1 to re-enable the Gemini vision audit (extra calls)
         run: python autonomous_engine.py
 
       - name: Upload build folder on failure (debugging)
