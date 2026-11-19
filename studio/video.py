@@ -1,4 +1,5 @@
 """Assemble a finished Short: voice -> timing -> music/SFX mix -> frame rendering -> encode."""
+import math
 import os
 import subprocess
 import time
@@ -62,6 +63,14 @@ def render_video(sb, tl, audio_path, out_mp4, max_seconds=None):
     total = tl["total"] if not max_seconds else min(tl["total"], max_seconds)
     n_frames = int(total * FPS)
     chunks_per_scene = [S.chunk_words(w) for w in tl["words"]]
+    # moments where the narrator stresses a word: the camera punches in on each one
+    punch_times = [[w["start"] for w in words if w["text"].strip(".,!?;:\"'").lower() in set(sc.get("emphasis", []))]
+                   for sc, words in zip(sb["scenes"], tl["words"])]
+    scenes = [dict(sc) for sc in sb["scenes"]]
+    if sb.get("hook_card"):
+        scenes[0]["hook_card"] = sb["hook_card"]
+    if sb.get("cta_question"):
+        scenes[-1]["cta"] = sb["cta_question"]
     # No film grain: it is incompressible and exploded file size (200MB+). Flat vector art encodes to a few MB.
     grade = "eq=contrast=1.06:saturation=1.12" if genre == "comedy" else "eq=contrast=1.10:saturation=0.95:gamma=0.97"
     cmd = ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "bgra", "-s", f"{W}x{H}", "-r", str(FPS), "-i", "-",
@@ -76,11 +85,14 @@ def render_video(sb, tl, audio_path, out_mp4, max_seconds=None):
         T = f / FPS
         while idx + 1 < len(starts) and T >= starts[idx + 1]:
             idx += 1
-        sc = sb["scenes"][idx]
+        sc = scenes[idx]
         local = T - starts[idx]
+        punch = max([math.exp(-(T - pt) * 8) for pt in punch_times[idx] if 0 <= T - pt < 0.6] or [0.0])
         ctx.save(); ctx.set_operator(cairo.OPERATOR_SOURCE); ctx.set_source_rgba(0, 0, 0, 1); ctx.paint(); ctx.restore()
-        S.draw_scene(ctx, sc, local, durs[idx], genre)
+        S.draw_scene(ctx, sc, local, durs[idx], genre, punch=punch)
         S.draw_caption(ctx, chunks_per_scene[idx], T, emphasis=set(sc.get("emphasis", [])))
+        S.rect(ctx, 70, 62, W - 140, 9, "#ffffff", .18)                  # retention progress bar
+        S.rect(ctx, 70, 62, (W - 140) * min(1.0, T / max(total, 0.1)), 9, "#ffd23f", .95)
         if f > n_frames - 8:                                           # fade to black at the very end
             S.rect(ctx, 0, 0, W, H, "#000000", min(1.0, (f - (n_frames - 8)) / 7))
         surf.flush()
@@ -94,7 +106,15 @@ def render_video(sb, tl, audio_path, out_mp4, max_seconds=None):
     return out_mp4
 
 def render_thumbnail(sb, tl, out_jpg):
-    """Dramatic frame from scene 2-3 + big hook text. 1080x1920 JPEG (<2MB)."""
+    """Composed click-thumbnail (studio.thumb); falls back to the plain scene frame if composition ever fails."""
+    try:
+        from . import thumb
+        return thumb.make_thumbnail(sb, out_jpg)
+    except Exception as e:
+        print(f"Thumbnail composer failed ({str(e)[:120]}) - using the plain frame instead.")
+    return _plain_thumbnail(sb, tl, out_jpg)
+
+def _plain_thumbnail(sb, tl, out_jpg):
     from PIL import Image
     i = min(2, len(sb["scenes"]) - 1)
     surf = cairo.ImageSurface(cairo.FORMAT_ARGB32, W, H)
