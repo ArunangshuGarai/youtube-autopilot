@@ -430,12 +430,31 @@ def draw_cta(ctx, text, t, dur):
     surfs = [text_surface([(ln, (0.07, 0.07, 0.08))], 62, FONT_COMIC, stroke=0, shadow=False, max_width=800) for ln in lines]
     bw = max(sf[1] for sf in surfs) + 150
     bh = sum(sf[2] for sf in surfs) + 70
-    ctx.save(); ctx.translate(W / 2, 370); ctx.scale(.7 + .3 * k, .7 + .3 * k)
+    ctx.save(); ctx.translate(W / 2, 195); ctx.scale(.7 + .3 * k, .7 + .3 * k)
     outlined_box(ctx, -bw / 2, -bh / 2, bw, bh, "#ffffff", lw=7, r=26)
     circle(ctx, -bw / 2 + 62, 0, 30, "#ff3d3d"); circle(ctx, -bw / 2 + 62, -6, 11, "#ffffff"); circle(ctx, -bw / 2 + 62, 20, 17, "#ffffff", .9)
     y = -bh / 2 + 28
     for sf, w, h in surfs:
         ctx.set_source_surface(sf, -bw / 2 + 112, y); ctx.paint(); y += h
+    ctx.restore()
+
+def draw_evidence_card(ctx, text, t):
+    """Renders a crisp phone-alert or comic evidence sign cut-in at the top of the frame so twists are visually shown."""
+    if not text:
+        return
+    k = ease_out_back(min(1, t / 0.24))
+    words = str(text).upper().split()
+    half = max(1, len(words) // 2) if len(text) > 18 else len(words)
+    lines = [" ".join(words[:half]), " ".join(words[half:])] if half < len(words) else [str(text).upper()]
+    surfs = [text_surface([(ln, (1.0, 0.96, 0.85))], 66, FONT_CAPTION, stroke=6, shadow=False, max_width=760) for ln in lines]
+    bw = max(sf[1] for sf in surfs) + 110
+    bh = sum(sf[2] for sf in surfs) + 84
+    ctx.save(); ctx.translate(W / 2, 270); ctx.scale(0.65 + 0.35 * k, 0.65 + 0.35 * k)
+    outlined_box(ctx, -bw / 2, -bh / 2, bw, bh, "#161925", lw=9, r=24)
+    rect(ctx, -bw / 2 + 12, -bh / 2 + 12, bw - 24, 14, "#ff3b30")
+    y = -bh / 2 + 44
+    for sf, w, h in surfs:
+        ctx.set_source_surface(sf, -w / 2, y); ctx.paint(); y += h
     ctx.restore()
 
 # ============================================================================= director: draws one scene frame
@@ -566,6 +585,8 @@ def draw_scene(ctx, scene, t, dur, genre="thriller", punch=0.0):
         draw_hook_card(ctx, scene["hook_card"], t)
     if scene.get("cta"):
         draw_cta(ctx, scene["cta"], t, dur)
+    if scene.get("closeup_card") and not (scene.get("hook_card") and t < 2.3):
+        draw_evidence_card(ctx, scene["closeup_card"], t)
 
     # overlay stamp ("3:07 AM", "ONE WEEK LATER")
     ov = scene.get("overlay")

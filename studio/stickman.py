@@ -500,7 +500,7 @@ class Figure:
         limb(J["hip"], J["neck"])                                        # torso
         if body_acc:
             _acc_body(ctx, body_acc, J["neck"], J["hip"], a["torso"])
-        if prop:
+        if prop and abs(a["eR"]) < 145:  # Never float props above the head during overhead panic/shock poses
             ang = a["eR"] if a["eR"] != BASE["eR"] else 80
             draw_prop(ctx, prop, J["hR"], ang if "rot" not in a or not a["rot"] else ang + a["rot"], t)
         limb(J["sh"], J["elR"], J["hR"])                                 # near arm

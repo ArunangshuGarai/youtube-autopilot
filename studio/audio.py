@@ -68,7 +68,17 @@ def _resample(x, sr_from, sr_to=SR):
 
 def _tts_kokoro(text, prof, speed):
     k = _kokoro()
-    samples, sr = k.create(text, voice=prof["voice"], speed=speed, lang="en-us")
+    vname = prof["voice"]
+    try:
+        if vname == "am_fenrir":
+            voice_vec = k.get_voice_style("am_michael") * 0.65 + k.get_voice_style("am_adam") * 0.35
+        elif vname in ("am_puck", "am_michael"):
+            voice_vec = k.get_voice_style("am_puck") * 0.55 + k.get_voice_style("am_michael") * 0.45
+        else:
+            voice_vec = vname
+    except Exception:
+        voice_vec = vname
+    samples, sr = k.create(text, voice=voice_vec, speed=speed, lang="en-us")
     return _resample(_trim(np.asarray(samples, dtype=np.float32), sr), sr)
 
 def _tts_edge(text, prof, speed_mult, out_tmp):
