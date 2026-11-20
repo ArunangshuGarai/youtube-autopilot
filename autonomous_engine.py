@@ -18,6 +18,7 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
 from studio import learn, packaging, script, video
+from studio import ai_animator
 
 MEMORY_FILE = "memory.json"
 BROWSER_HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"}
@@ -234,6 +235,25 @@ if __name__ == "__main__":
     memory = load_memory()
     sync_existing_channel_history(yt, memory)
     enforce_warmup_gate(memory)
+    if os.environ.get("USE_AI_ANIMATOR") == "1":
+        mp4, gag = ai_animator.build_rico_style_short(out_mp4="final_video.mp4")
+        thumb = "build/meme/shot_2.png"  # Punchline reaction frame as thumbnail
+        sb = {
+            "genre": "comedy",
+            "topic_id": gag["topic_id"],
+            "title": gag["title"],
+            "description": gag["description"],
+            "tags": gag["tags"],
+            "is_fiction": True,
+            "scenes": [{"narration": gag["top_banner"]}],
+        }
+        vid, when, final_title = publish(yt, mp4, thumb, sb)
+        memory["used_topics"].append(gag["topic_id"])
+        memory["bot_uploads"] = memory.get("bot_uploads", 0) + 1
+        memory.setdefault("published_log", {})[vid] = {"title": final_title, "genre": "meme", "hook": gag["top_banner"], "scheduled_for": when}
+        save_memory(memory)
+        print(f"Success! AI 2D Cartoon Short {vid} scheduled for {when}")
+        raise SystemExit(0)
 
     hint = learn.learn_from_analytics(creds, memory) or fetch_self_learning_feedback(creds, memory)
     signals = learn.viral_scout(yt, memory) + harvest_signals()
