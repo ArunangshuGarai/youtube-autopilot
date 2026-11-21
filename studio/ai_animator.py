@@ -1,6 +1,6 @@
 """Real 2D Cartoon Animation Engine ($0): FLUX.1-schnell Keyframes -> Wan 2.2 / LTX Image-to-Video -> Meme SFX + Top Banner."""
 import os, json, time, random, subprocess, urllib.parse
-import requests
+import requests,re
 from PIL import Image, ImageDraw, ImageFont
 from gradio_client import Client, handle_file
 
@@ -102,20 +102,21 @@ def build_rico_style_short(out_mp4="final_video.mp4"):
         sfx_p = os.path.join("assets", "sfx", shot.get("sfx", "boom.mp3"))
         out_v = f"build/meme/seg_{i}.mp4"
         if os.path.exists(sfx_p):
-            subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", raw_v, "-i", sfx_p, "-c:v", "copy", "-c:a", "aac", "-shortest", out_v], check=True)
+            subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", raw_v, "-i", sfx_p, "-map", "0:v", "-map", "1:a", "-af", "apad", "-c:v", "copy", "-c:a", "aac", "-shortest", out_v], check=True)
         else:
-            subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", raw_v, "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo", "-c:v", "copy", "-c:a", "aac", "-shortest", out_v], check=True)
+            subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", raw_v, "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo", "-map", "0:v", "-map", "1:a", "-c:v", "copy", "-c:a", "aac", "-shortest", out_v], check=True)
         clips.append(f"file 'seg_{i}.mp4'")
 
     with open("build/meme/concat.txt", "w") as f:
         f.write("\n".join(clips))
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", "build/meme/concat.txt", "-c", "copy", "build/meme/joined.mp4"], check=True)
 
-    # Burn persistent Rico/Backbench top relatable banner cleanly in upper safe zone
-    banner_txt = gag["top_banner"].replace("'", "").replace(":", "")
+    # Strip emojis (DejaVuSans can't render color emojis) and fit cleanly inside the 960px yellow banner
+    clean_banner = re.sub(r"[^\x20-\x7E]", "", gag["top_banner"]).replace("'", "").replace(":", "").strip()[:36]
     subprocess.run([
         "ffmpeg", "-y", "-loglevel", "error", "-i", "build/meme/joined.mp4",
-        "-vf", f"drawbox=x=60:y=160:w=960:h=130:color=#ffd23f@0.95:t=fill,drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:text='{banner_txt}':fontcolor=black:fontsize=46:x=(w-text_w)/2:y=205",
+        "-vf", f"drawbox=x=60:y=160:w=960:h=130:color=#ffd23f@0.95:t=fill,drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:text='{clean_banner}':fontcolor=black:fontsize=38:x=(w-text_w)/2:y=208",
         "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "copy", out_mp4
     ], check=True)
+    return out_mp4, gag
     return out_mp4, gag
