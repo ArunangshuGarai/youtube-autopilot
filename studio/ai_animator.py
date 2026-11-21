@@ -1,7 +1,7 @@
 """Real 2D Cartoon Animation Engine ($0): FLUX.1-schnell Keyframes -> Wan 2.2 / LTX Image-to-Video -> Meme SFX + Top Banner."""
-import os, json, time, random, subprocess, urllib.parse
-import requests,re
-from PIL import Image, ImageDraw, ImageFont
+import os, re, json, time, random, subprocess, urllib.parse
+import requests
+from PIL import Image
 from gradio_client import Client, handle_file
 
 STYLE_PREFIX = (
@@ -11,8 +11,7 @@ STYLE_PREFIX = (
 )
 
 def generate_3shot_meme_script():
-    """Uses free GitHub Models GPT-4o to write a 14-second, 3-shot visual relatable comedy gag (zero essay narration)."""
-    token = os.environ["GITHUB_TOKEN"]
+    """Generates a 14-second 3-shot visual cartoon gag via GitHub Models -> Gemini -> Pollinations -> Backup."""
     prompt = """
     Write ONE ultra-relatable, hilarious 14-second silent 2D cartoon meme Short (Rico Animations / Avenu Animations style).
     NO narrator essay! The entire joke is told through ONE top banner caption + 3 escalating visual shots + meme SFX.
@@ -21,7 +20,7 @@ def generate_3shot_meme_script():
     {
       "topic_id": "unique-slug",
       "title": "That one moment at 3AM 😭 #Shorts",
-      "top_banner": "When you hear a noise at 3AM 💀",
+      "top_banner": "When you hear a noise at 3AM",
       "description": "Can you relate? 😂 #animation #meme #shorts #relatable",
       "tags": ["animation", "meme", "funny", "relatable", "stickman", "shorts"],
       "shots": [
@@ -43,14 +42,60 @@ def generate_3shot_meme_script():
       ]
     }
     """
-    r = requests.post(
-        "https://models.github.ai/inference/chat/completions",
-        headers={"Accept": "application/vnd.github+json", "Authorization": f"Bearer {token}", "X-GitHub-Api-Version": "2022-11-28", "Content-Type": "application/json"},
-        json={"model": "openai/gpt-4o", "messages": [{"role": "user", "content": prompt}], "temperature": 0.95},
-        timeout=45,
-    )
-    raw = r.json()["choices"][0]["message"]["content"]
-    return json.loads(raw[raw.find("{"):raw.rfind("}") + 1])
+
+    def _parse(txt):
+        return json.loads(txt[txt.find("{"):txt.rfind("}") + 1])
+
+    # 1. Try GitHub Models
+    token = os.environ.get("GITHUB_TOKEN", "")
+    if token:
+        try:
+            r = requests.post(
+                "https://models.github.ai/inference/chat/completions",
+                headers={"Accept": "application/vnd.github+json", "Authorization": f"Bearer {token}", "X-GitHub-Api-Version": "2022-11-28", "Content-Type": "application/json"},
+                json={"model": "openai/gpt-4o", "messages": [{"role": "user", "content": prompt}], "temperature": 0.95},
+                timeout=45,
+            )
+            if r.status_code == 200 and r.text.strip():
+                return _parse(r.json()["choices"][0]["message"]["content"])
+            print(f"GitHub Models status {r.status_code}: {r.text[:120]}")
+        except Exception as e:
+            print(f"GitHub Models note: {e}")
+
+    # 2. Try Gemini Free Tier
+    gem_key = os.environ.get("GEMINI_API_KEY", "")
+    if gem_key:
+        from google import genai
+        client = genai.Client(api_key=gem_key)
+        for m in ("gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite"):
+            try:
+                res = client.models.generate_content(model=m, contents=prompt)
+                if res.text:
+                    return _parse(res.text)
+            except Exception as e:
+                print(f"Gemini {m} note: {str(e)[:80]}")
+
+    # 3. Try Pollinations Text
+    try:
+        r = requests.post("https://text.pollinations.ai/", json={"messages": [{"role": "user", "content": prompt}], "model": "openai", "jsonMode": True}, timeout=45)
+        if r.status_code == 200 and r.text.strip():
+            return _parse(r.text)
+    except Exception as e:
+        print(f"Pollinations text note: {e}")
+
+    # 4. Curated Fallback Gag
+    return {
+        "topic_id": f"shower-eyes-closed-monster-{int(time.time()) % 10000}",
+        "title": "When you close your eyes in the shower 😭 #Shorts",
+        "top_banner": "When you close your eyes in the shower",
+        "description": "Every single time 😂 #animation #meme #shorts #relatable",
+        "tags": ["animation", "meme", "funny", "relatable", "stickman", "shorts"],
+        "shots": [
+            {"image_prompt": "Grey stickman character peacefully washing hair with shampoo bubbles under a shower head, closed eyes, matte sage background", "motion_prompt": "2D cartoon animation, character scrubbing shampoo foam on head, water droplets falling", "sfx": "crickets.mp3"},
+            {"image_prompt": "Creepy shadowy cartoon monster with glowing red eyes peeking around the bathroom door frame behind the shower", "motion_prompt": "Slow creepy 2D cartoon zoom in, monster eyes glowing brighter, eerie shadow", "sfx": "horror_sting.mp3"},
+            {"image_prompt": "Extreme close-up of grey stickman face with giant bloodshot red eyes screaming in panic under shower water", "motion_prompt": "Rapid chaotic cartoon shaking, water splashing, hilarious panic face", "sfx": "scream_cutoff.mp3"},
+        ],
+    }
 
 def make_keyframe(prompt_text, out_png, seed):
     hf_token = os.environ.get("HF_TOKEN")
@@ -82,7 +127,6 @@ def animate_keyframe_i2v(img_path, motion_prompt, out_mp4):
         except Exception as e:
             print(f"I2V Space {space_id} busy ({str(e)[:80]}), trying next...")
 
-    # High-energy 24fps punch-zoom + cartoon camera-shake fallback if ZeroGPU queue is full
     subprocess.run([
         "ffmpeg", "-y", "-loglevel", "error", "-loop", "1", "-i", img_path,
         "-vf", "zoompan=z='min(zoom+0.005,1.28)':x='iw/2-(iw/zoom/2)+8*sin(on)':y='ih/2-(ih/zoom/2)':d=108:s=1080x1920:fps=24",
@@ -111,12 +155,10 @@ def build_rico_style_short(out_mp4="final_video.mp4"):
         f.write("\n".join(clips))
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", "build/meme/concat.txt", "-c", "copy", "build/meme/joined.mp4"], check=True)
 
-    # Strip emojis (DejaVuSans can't render color emojis) and fit cleanly inside the 960px yellow banner
     clean_banner = re.sub(r"[^\x20-\x7E]", "", gag["top_banner"]).replace("'", "").replace(":", "").strip()[:36]
     subprocess.run([
         "ffmpeg", "-y", "-loglevel", "error", "-i", "build/meme/joined.mp4",
         "-vf", f"drawbox=x=60:y=160:w=960:h=130:color=#ffd23f@0.95:t=fill,drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:text='{clean_banner}':fontcolor=black:fontsize=38:x=(w-text_w)/2:y=208",
         "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "copy", out_mp4
     ], check=True)
-    return out_mp4, gag
     return out_mp4, gag
