@@ -12,7 +12,8 @@
     "brinks-robbery-1950",
     "text-from-my-own-number",
     "photo-from-behind-wardrobe",
-    "burglar-calls-911-store-lock"
+    "burglar-calls-911-store-lock",
+    "nap-time-travel"
   ],
   "published_log": {
     "TREDHWTKPnU": {
@@ -114,10 +115,16 @@
         "Suspect used an office phone to dial 911 seeking rescue from inside",
         "Police arrived and freed the suspect directly into custody"
       ]
+    },
+    "VnqvTxjbhpA": {
+      "title": "When 5 minutes turns into 7 hours \ud83d\ude2d #Shorts",
+      "genre": "meme",
+      "hook": "When you close your eyes for '5 more minutes' at 7:55 AM",
+      "scheduled_for": "2026-11-21T14:28:53Z"
     }
   },
   "channel_synced": true,
-  "bot_uploads": 8,
+  "bot_uploads": 9,
   "genre_log": [
     "comedy",
     "crime",
