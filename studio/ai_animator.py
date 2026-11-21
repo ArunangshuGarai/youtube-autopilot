@@ -97,35 +97,54 @@ def generate_3shot_meme_script():
         ],
     }
 
-def make_keyframe(prompt_text, out_png, seed):
-    hf_token = os.environ.get("HF_TOKEN")
+def _hf_client(space_id):
+    hf_token = os.environ.get("HF_TOKEN") or None
     try:
-        client = Client("black-forest-labs/FLUX.1-schnell", hf_token=hf_token)
+        return Client(space_id, token=hf_token)
+    except TypeError:
+        return Client(space_id)
+
+def make_keyframe(prompt_text, out_png, seed):
+    # 1. Try Hugging Face FLUX.1-schnell via Gradio 6 Client (uses token= / HF_TOKEN env)
+    try:
+        client = _hf_client("black-forest-labs/FLUX.1-schnell")
         res = client.predict(prompt=STYLE_PREFIX + prompt_text, seed=seed, randomize_seed=False, width=768, height=1344, num_inference_steps=4, api_name="/infer")
         src = res[0]["path"] if isinstance(res[0], dict) else res[0]
         Image.open(src).convert("RGB").resize((1080, 1920), Image.Resampling.LANCZOS).save(out_png)
+        print(f"Keyframe generated via HF FLUX.1-schnell -> {out_png}")
         return out_png
     except Exception as e:
-        print(f"FLUX HF fallback to Pollinations ({e})")
-        url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(STYLE_PREFIX + prompt_text)}?width=768&height=1344&model=flux&seed={seed}&nologo=true"
-        r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=60)
-        with open(out_png, "wb") as f:
-            f.write(r.content)
-        Image.open(out_png).convert("RGB").resize((1080, 1920), Image.Resampling.LANCZOS).save(out_png)
-        return out_png
+        print(f"FLUX HF note ({str(e)[:100]}), trying Pollinations...")
+
+    # 2. Fallback to Pollinations with content-type check & retry
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/131.0.0.0 Safari/537.36"}
+    for attempt, model in enumerate(("flux", "turbo", "flux")):
+        try:
+            url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(STYLE_PREFIX + prompt_text)}?width=768&height=1344&model={model}&seed={seed + attempt}&nologo=true"
+            r = requests.get(url, headers=headers, timeout=60)
+            if r.status_code == 200 and r.headers.get("content-type", "").startswith("image"):
+                with open(out_png, "wb") as f:
+                    f.write(r.content)
+                Image.open(out_png).convert("RGB").resize((1080, 1920), Image.Resampling.LANCZOS).save(out_png)
+                print(f"Keyframe generated via Pollinations/{model} -> {out_png}")
+                return out_png
+        except Exception as e:
+            print(f"Pollinations attempt {attempt} note: {str(e)[:80]}")
+        time.sleep(4)
+    raise RuntimeError(f"Could not generate keyframe for {out_png}")
 
 def animate_keyframe_i2v(img_path, motion_prompt, out_mp4):
     """Animates the 2D cartoon keyframe into a real 4-5s moving video via free Hugging Face Wan 2.2 / LTX ZeroGPU Space."""
-    hf_token = os.environ.get("HF_TOKEN")
     for space_id in ("Wan-AI/Wan2.2-TI2V-5B", "Lightricks/LTX-Video"):
         try:
-            client = Client(space_id, hf_token=hf_token)
+            client = _hf_client(space_id)
             res = client.predict(handle_file(img_path), motion_prompt, api_name="/predict")
             vid = res[0]["video"] if isinstance(res, (list, tuple)) and isinstance(res[0], dict) else (res[0] if isinstance(res, (list, tuple)) else res)
             subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", vid, "-vf", "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,fps=24", "-c:v", "libx264", "-pix_fmt", "yuv420p", out_mp4], check=True)
+            print(f"Animated via {space_id} -> {out_mp4}")
             return out_mp4
         except Exception as e:
-            print(f"I2V Space {space_id} busy ({str(e)[:80]}), trying next...")
+            print(f"I2V Space {space_id} busy ({str(e)[:90]}), trying next...")
 
     subprocess.run([
         "ffmpeg", "-y", "-loglevel", "error", "-loop", "1", "-i", img_path,
