@@ -55,6 +55,16 @@ jobs:
           path: ~/.cache/huggingface
           key: whisper-base-en-v1
 
+      - name: Download Meme SFX Pack into assets/sfx/
+        run: |
+          mkdir -p assets/sfx
+          curl -fsSL "https://www.myinstants.com/media/sounds/vine-boom-meme_cCCpxZG.mp3" -o assets/sfx/boom.mp3
+          curl -fsSL "https://www.myinstants.com/media/sounds/horror-violin_9xxpnRR.mp3" -o assets/sfx/horror_sting.mp3
+          curl -fsSL "https://www.myinstants.com/media/sounds/cartoon-screaming.mp3" -o assets/sfx/scream_cutoff.mp3
+          curl -fsSL "https://www.myinstants.com/media/sounds/meme-violin-sad-violin.mp3" -o assets/sfx/sad_violin.mp3
+          curl -fsSL "https://www.myinstants.com/media/sounds/cartoonslip.mp3" -o assets/sfx/cartoon_slip.mp3
+          curl -fsSL "https://www.myinstants.com/media/sounds/crickets.swf.mp3" -o assets/sfx/crickets.mp3
+
       - name: Write, animate, voice and publish a Short
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -62,6 +72,8 @@ jobs:
           YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
           YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          USE_AI_ANIMATOR: "1"
           # Optional tuning (Settings > Secrets and variables > Actions > Variables). Empty = defaults.
           TTS_PROVIDER: ${{ vars.TTS_PROVIDER }}
           VOICE_GRAVE: ${{ vars.VOICE_GRAVE }}

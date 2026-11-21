@@ -9,9 +9,9 @@ Both degrade to '' / [] on any error (missing scope, quota, brand-new channel); 
 import datetime as dt
 
 NICHE_QUERIES = {
-    "crime": ["true crime heist story", "unsolved mystery shorts", "criminal mastermind story"],
-    "thriller": ["scary story animated", "creepy text story", "horror short story"],
-    "comedy": ["dumbest criminal story", "funny fail story animated", "storytime comedy"],
+    "crime": ["stickman animation mystery shorts", "2d cartoon heist meme shorts"],
+    "thriller": ["rico animations style meme shorts", "2d stickman scary animation shorts"],
+    "comedy": ["2d stickman animation meme funny", "relatable cartoon animation shorts"],
 }
 
 def learn_from_analytics(creds, memory, days=28):
@@ -58,7 +58,7 @@ def viral_scout(youtube, memory, genre=None, max_titles=6):
         after = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
         for g, queries in NICHE_QUERIES.items():
             q = queries[dt.date.today().toordinal() % len(queries)]
-            res = youtube.search().list(q=q, part="snippet", type="video", videoDuration="short", order="viewCount", publishedAfter=after, maxResults=12, relevanceLanguage="en").execute()
+            res = youtube.search().list(q=q, part="snippet", type="video", videoDuration="short", order="viewCount", publishedAfter=after, maxResults=12, regionCode="US", relevanceLanguage="en").execute()
             ids = [i["id"]["videoId"] for i in res.get("items", [])]
             if not ids:
                 continue
